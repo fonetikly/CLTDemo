@@ -1,0 +1,3536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CLT Home Transformation v3 — Extended Construction Detail</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #08090d;
+  color: #eee;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  min-height: 100vh;
+}
+h1 {
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #c4913a;
+  margin-bottom: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.subtitle {
+  font-size: 0.75em;
+  color: #555;
+  margin-bottom: 14px;
+  letter-spacing: 0.05em;
+}
+canvas {
+  border-radius: 12px;
+  border: 1px solid #1a1a1a;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(196,145,58,0.1);
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  align-items: center;
+}
+button {
+  background: #15171c;
+  border: 1px solid #2a2d35;
+  color: #bbb;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8em;
+  transition: all 0.15s;
+}
+button:hover { background: #1e2128; color: #fff; border-color: #3a3d45; }
+#playPause {
+  background: linear-gradient(135deg, #c4913a22, #c4913a11);
+  border-color: #c4913a55;
+  color: #c4913a;
+}
+#playPause:hover { background: linear-gradient(135deg, #c4913a44, #c4913a22); }
+.speed {
+  background: #15171c;
+  border: 1px solid #2a2d35;
+  color: #888;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.75em;
+}
+.counter { color: #666; font-size: 0.8em; margin-left: 6px; font-variant-numeric: tabular-nums; }
+.step-info {
+  text-align: center;
+  margin-top: 14px;
+  max-width: 820px;
+  min-height: 60px;
+}
+.step-title {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: #e2a84b;
+  margin-bottom: 5px;
+  letter-spacing: 0.02em;
+}
+.step-desc {
+  font-size: 0.82em;
+  color: #888;
+  line-height: 1.55;
+}
+.dots {
+  display: flex;
+  gap: 4px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 880px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #1a1d22;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #2a2d32;
+}
+.dot:hover { background: #444; transform: scale(1.2); }
+.dot.done { background: #3d2a10; border-color: #5a4020; }
+.dot.active {
+  background: #c4913a;
+  border-color: #e2b060;
+  box-shadow: 0 0 8px rgba(196,145,58,0.5);
+  transform: scale(1.3);
+}
+</style>
+</head>
+<body>
+<h1>CLT Home Transformation System — v3 Expanded Detail</h1>
+<div class="subtitle">Site-fabricated mass timber construction — 42-step build sequence</div>
+<canvas id="c" width="900" height="560"></canvas>
+<div class="controls">
+  <button id="prev">← Prev</button>
+  <button id="playPause">⏸ Pause</button>
+  <button id="next">Next →</button>
+  <select class="speed" id="speed">
+    <option value="6000">Slow</option>
+    <option value="4500" selected>Normal</option>
+    <option value="3000">Fast</option>
+  </select>
+  <span class="counter" id="counter">1 / 42</span>
+</div>
+<div class="step-info">
+  <div class="step-title" id="stepTitle"></div>
+  <div class="step-desc" id="stepDesc"></div>
+</div>
+<div class="dots" id="dots"></div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 900, H = 560;
+
+// ============================================================
+// LAYOUT CONSTANTS
+// ============================================================
+const GY = 420;              // ground line y
+const HX = 260;              // old house left x
+const HW = 380;              // old house width
+const HH = 200;              // house wall height
+const HY = GY - HH;          // house top y
+const RPEAK_Y = HY - 100;    // old roof peak y
+const LAYER = 7;             // CLT lamination thickness (px visual)
+const MAX_LAYERS = 18;       // layers per wall side
+const BOARD_W = 22;          // individual board width
+const INSET_X = 660;         // detail inset x
+const INSET_Y = 28;          // detail inset y
+const INSET_W = 220;         // detail inset width
+const INSET_H = 150;         // detail inset height
+
+// ============================================================
+// PALETTE
+// ============================================================
+const P = {
+  sky1: '#050914', sky2: '#0d1b2e', sky3: '#1a2f4a',
+  horizon: '#2d3f5a',
+  ground1: '#1a2a10', ground2: '#2d4520', ground3: '#3a5a28',
+  grassGreen: '#4a7030',
+  dirt: '#3d2a14', dirtDark: '#2a1c0e',
+  oldWall: '#7a6548', oldWallD: '#5c4c36', oldWallL: '#9a8258',
+  oldRoof: '#3d2818', oldRoofL: '#5a3d22',
+  oldWin: '#7eb8d4', oldWinD: '#4a7e9a',
+  clt: '#c4913a', cltD: '#8b6520', cltL: '#deb887', cltVL: '#efd5a8',
+  cltEnd: '#6b4a15',
+  birch: '#e8d4a8', birchD: '#b59968',
+  redwood: '#a0522d', redwoodD: '#6b3719',
+  conc: '#7a7e85', concD: '#555961', concL: '#9ca1aa',
+  steel: '#94a3b8', steelD: '#5a6472', steelL: '#c0c8d4',
+  robot: '#3b82f6', robotD: '#1d4ed8', robotL: '#93c5fd', robotGlow: '#60a5fa',
+  fiber: '#00ff88', fiberD: '#009944', fiberGlow: 'rgba(0,255,136,0.6)',
+  solar: '#1e3a5f', solarD: '#0f1f3a', solarCell: '#2563eb', solarHi: '#60a5fa',
+  batt: '#1d4ed8', battL: '#60a5fa',
+  hvac: '#64748b', hvacL: '#94a3b8',
+  radiant: '#f97316', radiantL: '#fb923c',
+  copper: '#b45309', copperL: '#d97706',
+  truck: '#991b1b', truckBody: '#2a2e38', truckGlass: '#4a7e9a',
+  vacBlue: 'rgba(30,80,140,0.75)',
+  uv: '#a855f7',
+  text: '#ffffff', textDim: '#6b7280', textLabel: '#d1d5db',
+  highlight: '#fbbf24',
+  warm: '#fef3c7',
+};
+
+// ============================================================
+// CORE DRAWING HELPERS
+// ============================================================
+function roundRect(x,y,w,h,r) {
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+function gradientFill(x1,y1,x2,y2,stops) {
+  const g = ctx.createLinearGradient(x1,y1,x2,y2);
+  stops.forEach(([pos,col]) => g.addColorStop(pos,col));
+  return g;
+}
+
+function pulse(t, speed=2) { return (Math.sin(t*speed) + 1) / 2; }
+
+// ============================================================
+// BACKGROUND / LANDSCAPE
+// ============================================================
+function bg(t) {
+  // Sky gradient
+  const g = ctx.createLinearGradient(0,0,0,GY);
+  g.addColorStop(0, P.sky1);
+  g.addColorStop(0.4, P.sky2);
+  g.addColorStop(1, P.sky3);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,GY);
+
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 73.3) % W;
+    const sy = (i * 41.7) % (GY * 0.6);
+    const tw = pulse(t + i, 3) * 0.5 + 0.5;
+    ctx.globalAlpha = tw * 0.6;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  // Moon suggestion
+  const mg = ctx.createRadialGradient(760, 80, 5, 760, 80, 35);
+  mg.addColorStop(0, 'rgba(255,240,200,0.4)');
+  mg.addColorStop(1, 'rgba(255,240,200,0)');
+  ctx.fillStyle = mg;
+  ctx.fillRect(720, 40, 80, 80);
+  ctx.fillStyle = 'rgba(255,245,220,0.8)';
+  ctx.beginPath();
+  ctx.arc(760, 80, 12, 0, Math.PI*2);
+  ctx.fill();
+
+  // Distant hills
+  ctx.fillStyle = P.horizon;
+  ctx.beginPath();
+  ctx.moveTo(0, GY-20);
+  for (let x = 0; x <= W; x += 40) {
+    ctx.lineTo(x, GY - 25 - Math.sin(x*0.015) * 12 - Math.cos(x*0.008) * 18);
+  }
+  ctx.lineTo(W, GY);
+  ctx.lineTo(0, GY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Trees on hills
+  ctx.fillStyle = 'rgba(20,30,15,0.9)';
+  for (let i = 0; i < 12; i++) {
+    const tx = 30 + i * 75;
+    const ty = GY - 40 - Math.sin(tx*0.015) * 10;
+    ctx.beginPath();
+    ctx.moveTo(tx-5, ty+8);
+    ctx.lineTo(tx, ty-12);
+    ctx.lineTo(tx+5, ty+8);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function ground(t) {
+  // Ground gradient
+  const g = ctx.createLinearGradient(0,GY,0,H);
+  g.addColorStop(0, P.ground2);
+  g.addColorStop(0.3, P.ground1);
+  g.addColorStop(1, P.dirtDark);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,GY,W,H-GY);
+
+  // Grass texture
+  ctx.strokeStyle = P.grassGreen;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 120; i++) {
+    const gx = (i * 17.3) % W;
+    const gh = 2 + (i % 4);
+    ctx.globalAlpha = 0.3 + (i%3)*0.15;
+    ctx.beginPath();
+    ctx.moveTo(gx, GY);
+    ctx.lineTo(gx + (i%2?1:-1), GY - gh);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // Ground line
+  ctx.strokeStyle = P.ground3;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0,GY);
+  ctx.lineTo(W,GY);
+  ctx.stroke();
+}
+
+// ============================================================
+// OLD HOUSE (detailed, weathered)
+// ============================================================
+function oldHouse(alpha=1, roofOn=true, damaged=true) {
+  ctx.globalAlpha = alpha;
+
+  // Foundation
+  ctx.fillStyle = gradientFill(HX, GY-14, HX, GY, [
+    [0, P.concL], [1, P.concD]
+  ]);
+  ctx.fillRect(HX-8, GY-14, HW+16, 14);
+  // Foundation cracks
+  if (damaged) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(HX+40, GY-14); ctx.lineTo(HX+42, GY-6); ctx.lineTo(HX+38, GY);
+    ctx.moveTo(HX+200, GY-14); ctx.lineTo(HX+205, GY-8); ctx.lineTo(HX+200, GY);
+    ctx.stroke();
+  }
+
+  // Walls base
+  const wallGrad = gradientFill(HX, HY, HX+HW, HY, [
+    [0, P.oldWallL], [0.5, P.oldWall], [1, P.oldWallD]
+  ]);
+  ctx.fillStyle = wallGrad;
+  ctx.fillRect(HX, HY, HW, HH);
+
+  // Clapboard siding
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 1;
+  for (let y = HY+8; y < GY-14; y += 12) {
+    ctx.beginPath();
+    ctx.moveTo(HX, y);
+    ctx.lineTo(HX+HW, y);
+    ctx.stroke();
+    // Highlight
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath();
+    ctx.moveTo(HX, y+1);
+    ctx.lineTo(HX+HW, y+1);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  }
+
+  // Peeling paint / weathering patches
+  if (damaged) {
+    ctx.fillStyle = 'rgba(60,40,20,0.3)';
+    [[HX+60,HY+25,40,15],[HX+170,HY+80,50,20],[HX+280,HY+140,35,25]].forEach(([x,y,w,h])=>{
+      ctx.fillRect(x,y,w,h);
+    });
+    // Stains
+    ctx.fillStyle = 'rgba(40,25,10,0.4)';
+    ctx.beginPath();
+    ctx.moveTo(HX+100, HY+20);
+    ctx.quadraticCurveTo(HX+105, HY+60, HX+108, HY+100);
+    ctx.lineTo(HX+112, HY+100);
+    ctx.quadraticCurveTo(HX+110, HY+60, HX+105, HY+20);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Windows — left side
+  drawOldWindow(HX+30, HY+40, 60, 55);
+  drawOldWindow(HX+30, HY+115, 60, 50);
+  // Windows — right side
+  drawOldWindow(HX+HW-90, HY+40, 60, 55);
+  drawOldWindow(HX+HW-90, HY+115, 60, 50);
+
+  // Door
+  ctx.fillStyle = gradientFill(HX+HW/2-25, GY-80, HX+HW/2+25, GY-80, [
+    [0, '#4a2810'], [0.5, '#3a1e08'], [1, '#2a1404']
+  ]);
+  ctx.fillRect(HX+HW/2-25, GY-80, 50, 80);
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(HX+HW/2-25, GY-80, 50, 80);
+  // Door panels
+  ctx.strokeRect(HX+HW/2-21, GY-76, 42, 35);
+  ctx.strokeRect(HX+HW/2-21, GY-37, 42, 33);
+  // Doorknob
+  ctx.fillStyle = '#aa8800';
+  ctx.beginPath();
+  ctx.arc(HX+HW/2+15, GY-40, 2, 0, Math.PI*2);
+  ctx.fill();
+
+  // Roof
+  if (roofOn) {
+    // Roof face
+    const rg = ctx.createLinearGradient(HX, HY, HX+HW, HY);
+    rg.addColorStop(0, P.oldRoofL);
+    rg.addColorStop(0.5, P.oldRoof);
+    rg.addColorStop(1, '#2a1810');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.moveTo(HX-20, HY);
+    ctx.lineTo(HX+HW/2, RPEAK_Y);
+    ctx.lineTo(HX+HW+20, HY);
+    ctx.closePath();
+    ctx.fill();
+    // Shingle lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 10; i++) {
+      const ry = HY - i * 10;
+      const rxL = HX - 20 + (20 + (HW+40)/2) * (i/10);
+      const rxR = HX + HW + 20 - (20 + (HW+40)/2) * (i/10);
+      ctx.beginPath();
+      ctx.moveTo(rxL, ry);
+      ctx.lineTo(rxR, ry);
+      ctx.stroke();
+    }
+    // Right side shading
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(HX+HW/2, RPEAK_Y);
+    ctx.lineTo(HX+HW+20, HY);
+    ctx.lineTo(HX+HW+20, HY+3);
+    ctx.lineTo(HX+HW/2+3, RPEAK_Y+3);
+    ctx.closePath();
+    ctx.fill();
+    // Chimney
+    ctx.fillStyle = '#5a4030';
+    ctx.fillRect(HX+HW*0.7, RPEAK_Y-10, 22, 30);
+    ctx.fillStyle = '#2a1a10';
+    ctx.fillRect(HX+HW*0.7, RPEAK_Y-12, 22, 3);
+    // Sag in roof (aged)
+    if (damaged) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(HX+HW*0.2, HY-15);
+      ctx.quadraticCurveTo(HX+HW*0.35, HY-10, HX+HW*0.5, HY-8);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawOldWindow(x, y, w, h) {
+  // Frame
+  ctx.fillStyle = '#3a2a1a';
+  ctx.fillRect(x-2, y-2, w+4, h+4);
+  // Glass
+  ctx.fillStyle = gradientFill(x, y, x+w, y+h, [
+    [0, P.oldWinD], [0.4, P.oldWin], [1, '#a8cee0']
+  ]);
+  ctx.fillRect(x, y, w, h);
+  // Mullions
+  ctx.strokeStyle = '#3a2a1a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x+w/2, y); ctx.lineTo(x+w/2, y+h);
+  ctx.moveTo(x, y+h/2); ctx.lineTo(x+w, y+h/2);
+  ctx.stroke();
+  // Reflection
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.moveTo(x+3, y+3);
+  ctx.lineTo(x+w*0.35, y+3);
+  ctx.lineTo(x+3, y+h*0.35);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ============================================================
+// CLT WALLS (detailed, board-level)
+// ============================================================
+function cltWalls(layers, opts={}) {
+  const { showBoards=true, highlightOuter=null, glowFiber=false, t=0, uvCure=false, showAdhesive=false } = opts;
+
+  for (let i = 0; i < layers; i++) {
+    const layerGrad = (i%2 === 0);
+    let baseCol = layerGrad ? P.clt : P.cltD;
+    let endCol = layerGrad ? P.cltEnd : '#4a3010';
+
+    if (highlightOuter) {
+      if (i === 0 || i === layers-1) { baseCol = P.birch; endCol = P.birchD; }
+      else if (i === 1 || i === layers-2) { baseCol = P.birchD; endCol = '#8a7040'; }
+      else if (i >= Math.floor(layers/2)-1 && i <= Math.floor(layers/2)+1) { baseCol = P.redwood; endCol = P.redwoodD; }
+    }
+
+    // Left wall
+    const lx = HX - (i+1)*LAYER;
+    const topY = HY - i*1.5;
+    const wallH = HH + i*1.5;
+
+    // Board face (outermost layers show board lines)
+    ctx.fillStyle = baseCol;
+    ctx.fillRect(lx, topY, LAYER, wallH);
+
+    // Alternating direction: even layers = vertical boards, odd = horizontal
+    if (showBoards && i === layers-1) {
+      ctx.strokeStyle = endCol;
+      ctx.lineWidth = 0.8;
+      if (layerGrad) {
+        // Vertical boards on face
+        for (let by = topY + BOARD_W; by < topY + wallH; by += BOARD_W) {
+          ctx.beginPath();
+          ctx.moveTo(lx, by);
+          ctx.lineTo(lx+LAYER, by);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Wood grain vertical streaks
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 0.6;
+    for (let g = 1; g < LAYER; g += 2) {
+      ctx.beginPath();
+      ctx.moveTo(lx+g, topY);
+      ctx.lineTo(lx+g, topY+wallH);
+      ctx.stroke();
+    }
+
+    // Adhesive bead between layers (shown on top edge)
+    if (showAdhesive && i > 0 && i === layers-1) {
+      ctx.fillStyle = 'rgba(240,200,100,0.7)';
+      ctx.fillRect(lx+LAYER-1, topY, 1, wallH);
+    }
+
+    // Right wall
+    const rx = HX + HW + i*LAYER;
+    ctx.fillStyle = baseCol;
+    ctx.fillRect(rx, topY, LAYER, wallH);
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 0.6;
+    for (let g = 1; g < LAYER; g += 2) {
+      ctx.beginPath();
+      ctx.moveTo(rx+g, topY);
+      ctx.lineTo(rx+g, topY+wallH);
+      ctx.stroke();
+    }
+
+    // Top edge cap showing laminations from above
+    ctx.fillStyle = endCol;
+    ctx.fillRect(lx, topY, LAYER, 1.5);
+    ctx.fillRect(rx, topY, LAYER, 1.5);
+  }
+
+  // Fiber optic glow
+  if (glowFiber && layers > 2) {
+    const p = pulse(t, 2) * 0.5 + 0.5;
+    ctx.shadowColor = P.fiber;
+    ctx.shadowBlur = 10 * p;
+    ctx.strokeStyle = `rgba(0,255,136,${0.6*p})`;
+    ctx.lineWidth = 1.3;
+    for (let i = 2; i < layers; i += 4) {
+      const lx = HX - (i+0.5)*LAYER;
+      const rx = HX + HW + (i+0.5)*LAYER;
+      ctx.beginPath();
+      ctx.moveTo(lx, HY - i*1.5 + 5);
+      ctx.lineTo(lx, HY - i*1.5 + HH + i*1.5 - 5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(rx, HY - i*1.5 + 5);
+      ctx.lineTo(rx, HY - i*1.5 + HH + i*1.5 - 5);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  // UV cure glow
+  if (uvCure) {
+    const p = pulse(t, 4);
+    ctx.shadowColor = P.uv;
+    ctx.shadowBlur = 15 * p;
+    ctx.strokeStyle = `rgba(168,85,247,${0.7*p})`;
+    ctx.lineWidth = 2;
+    for (let i = 2; i < layers; i += 4) {
+      const lx = HX - (i+0.5)*LAYER;
+      const rx = HX + HW + (i+0.5)*LAYER;
+      ctx.beginPath();
+      ctx.moveTo(lx, HY - i*1.5 + 5);
+      ctx.lineTo(lx, HY - i*1.5 + HH + i*1.5 - 5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(rx, HY - i*1.5 + 5);
+      ctx.lineTo(rx, HY - i*1.5 + HH + i*1.5 - 5);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ============================================================
+// HELICAL PIERS (with auger detail)
+// ============================================================
+function piers(installing=false, t=0) {
+  const xs = [
+    HX - MAX_LAYERS*LAYER - 10,
+    HX + HW*0.3,
+    HX + HW*0.7,
+    HX + HW + MAX_LAYERS*LAYER + 10
+  ];
+  xs.forEach((x, i) => {
+    // Pier shaft
+    ctx.fillStyle = P.steel;
+    ctx.fillRect(x-3, GY-6, 6, 50);
+    ctx.fillStyle = P.steelD;
+    ctx.fillRect(x+1, GY-6, 2, 50);
+    // Helical flights
+    ctx.strokeStyle = P.steelL;
+    ctx.lineWidth = 1.5;
+    for (let j = 0; j < 5; j++) {
+      const fy = GY + 8 + j * 8;
+      ctx.beginPath();
+      ctx.ellipse(x, fy, 9, 3, 0, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.beginPath();
+      ctx.ellipse(x, fy+1, 9, 3, 0, 0, Math.PI);
+      ctx.stroke();
+      ctx.strokeStyle = P.steelL;
+    }
+    // Top cap
+    ctx.fillStyle = P.steelL;
+    ctx.fillRect(x-9, GY-10, 18, 5);
+    ctx.fillStyle = P.steelD;
+    ctx.fillRect(x-9, GY-7, 18, 2);
+    // Bolts
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath(); ctx.arc(x-6, GY-8, 1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+6, GY-8, 1, 0, Math.PI*2); ctx.fill();
+  });
+}
+
+function augerMachine(t) {
+  // Mini excavator with auger attachment — drives piers
+  const ex = HX + HW + MAX_LAYERS*LAYER + 60;
+  const ey = GY - 45;
+  // Tracks
+  ctx.fillStyle = '#1a1a1a';
+  roundRect(ex-30, ey+30, 60, 14, 3); ctx.fill();
+  ctx.fillStyle = P.highlight;
+  for (let i = 0; i < 8; i++) {
+    ctx.fillRect(ex-28+i*8, ey+32, 6, 10);
+  }
+  // Cab
+  ctx.fillStyle = P.highlight;
+  ctx.fillRect(ex-20, ey, 40, 30);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(ex-16, ey+4, 22, 20);
+  // Boom
+  ctx.strokeStyle = P.highlight;
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(ex+10, ey+10);
+  ctx.lineTo(ex+30, ey-20);
+  ctx.lineTo(ex+50, ey+5);
+  ctx.stroke();
+  // Auger spinning
+  const spin = t * 10;
+  ctx.strokeStyle = P.steel;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(ex+50, ey+5);
+  ctx.lineTo(ex+50, GY+20);
+  ctx.stroke();
+  // Auger flights
+  ctx.strokeStyle = P.steelL;
+  ctx.lineWidth = 1.5;
+  for (let j = 0; j < 4; j++) {
+    const fy = ey + 25 + j * 15;
+    const sp = Math.sin(spin + j);
+    ctx.beginPath();
+    ctx.ellipse(ex+50, fy, 8, 2+sp*0.5, 0, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+// ============================================================
+// TRUCK (detailed Tesla Semi)
+// ============================================================
+function truck(t, arriving=true) {
+  const tx = arriving ? 780 - t*180 : 400;
+  const ty = GY - 80;
+
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(tx+110, GY-2, 130, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Trailer body
+  ctx.fillStyle = gradientFill(tx, ty, tx, ty+60, [
+    [0, '#3a3f48'], [0.5, P.truckBody], [1, '#1a1d22']
+  ]);
+  ctx.fillRect(tx, ty, 140, 62);
+  // Trailer ribs
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(tx+20+i*25, ty+2);
+    ctx.lineTo(tx+20+i*25, ty+60);
+    ctx.stroke();
+  }
+
+  // Pipe chambers exposed on top or visible through open side
+  ctx.fillStyle = P.steelD;
+  for (let i = 0; i < 3; i++) {
+    const px = tx+15+i*40;
+    const py = ty+5;
+    ctx.fillRect(px, py, 35, 52);
+    // Pipe cylinder shading
+    ctx.fillStyle = gradientFill(px, py, px, py+52, [
+      [0, P.steelL], [0.3, P.steel], [0.7, P.steel], [1, P.steelD]
+    ]);
+    ctx.fillRect(px+2, py+2, 31, 48);
+    // End caps
+    ctx.fillStyle = '#2a2e36';
+    ctx.fillRect(px+2, py+2, 31, 4);
+    ctx.fillRect(px+2, py+46, 31, 4);
+    // Bolts around end cap
+    ctx.fillStyle = '#000';
+    for (let b = 0; b < 5; b++) {
+      ctx.beginPath();
+      ctx.arc(px+6+b*5, py+4, 0.8, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // Pressure gauge
+    ctx.fillStyle = P.steelL;
+    ctx.beginPath();
+    ctx.arc(px+17, py+26, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    // Gauge needle
+    ctx.strokeStyle = '#f00';
+    ctx.beginPath();
+    ctx.moveTo(px+17, py+26);
+    ctx.lineTo(px+17+Math.cos(-Math.PI*0.3)*3, py+26+Math.sin(-Math.PI*0.3)*3);
+    ctx.stroke();
+    ctx.fillStyle = P.steelD;
+  }
+
+  // Cab
+  ctx.fillStyle = gradientFill(tx+140, ty, tx+140, ty+62, [
+    [0, '#d4d7dc'], [0.3, '#9ca0a8'], [0.7, P.steel], [1, '#4a4e56']
+  ]);
+  // Cab body with slope
+  ctx.beginPath();
+  ctx.moveTo(tx+140, ty+62);
+  ctx.lineTo(tx+140, ty+8);
+  ctx.quadraticCurveTo(tx+145, ty-5, tx+165, ty-8);
+  ctx.lineTo(tx+218, ty-8);
+  ctx.quadraticCurveTo(tx+232, ty-5, tx+235, ty+20);
+  ctx.lineTo(tx+235, ty+62);
+  ctx.closePath();
+  ctx.fill();
+
+  // Windshield (wrap-around Tesla style)
+  ctx.fillStyle = gradientFill(tx+150, ty-5, tx+230, ty+25, [
+    [0, '#1a2a3a'], [0.5, '#2a4a6a'], [1, '#4a7e9a']
+  ]);
+  ctx.beginPath();
+  ctx.moveTo(tx+148, ty+20);
+  ctx.quadraticCurveTo(tx+150, ty-3, tx+170, ty-5);
+  ctx.lineTo(tx+215, ty-5);
+  ctx.quadraticCurveTo(tx+230, ty-3, tx+232, ty+22);
+  ctx.lineTo(tx+148, ty+22);
+  ctx.closePath();
+  ctx.fill();
+  // Windshield reflection
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.moveTo(tx+155, ty+18);
+  ctx.lineTo(tx+195, ty-2);
+  ctx.lineTo(tx+198, ty-2);
+  ctx.lineTo(tx+158, ty+18);
+  ctx.closePath();
+  ctx.fill();
+
+  // Door line
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tx+175, ty+25);
+  ctx.lineTo(tx+175, ty+60);
+  ctx.stroke();
+
+  // Headlight
+  ctx.fillStyle = '#fef3c7';
+  ctx.shadowColor = '#fef3c7';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(tx+232, ty+25, 4, 8);
+  ctx.shadowBlur = 0;
+
+  // Wheels
+  const wheels = [tx+20, tx+55, tx+95, tx+130, tx+175, tx+215];
+  wheels.forEach(wx => {
+    // Tire
+    ctx.fillStyle = '#0a0a0a';
+    ctx.beginPath();
+    ctx.arc(wx, GY-8, 14, 0, Math.PI*2);
+    ctx.fill();
+    // Rim
+    ctx.fillStyle = P.steelL;
+    ctx.beginPath();
+    ctx.arc(wx, GY-8, 8, 0, Math.PI*2);
+    ctx.fill();
+    // Hub
+    ctx.fillStyle = P.steelD;
+    ctx.beginPath();
+    ctx.arc(wx, GY-8, 3, 0, Math.PI*2);
+    ctx.fill();
+    // Spokes
+    ctx.strokeStyle = P.steelD;
+    ctx.lineWidth = 1;
+    for (let s = 0; s < 5; s++) {
+      const a = (s/5)*Math.PI*2 + t;
+      ctx.beginPath();
+      ctx.moveTo(wx+Math.cos(a)*3, GY-8+Math.sin(a)*3);
+      ctx.lineTo(wx+Math.cos(a)*7, GY-8+Math.sin(a)*7);
+      ctx.stroke();
+    }
+  });
+
+  // Regen indicator on trailer
+  const rp = pulse(t, 5);
+  ctx.fillStyle = `rgba(0,220,100,${0.4+rp*0.6})`;
+  ctx.shadowColor = '#00dc64';
+  ctx.shadowBlur = 6*rp;
+  roundRect(tx+10, ty-18, 80, 12, 3);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#003a10';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillText('⚡ REGEN→VAC', tx+14, ty-9);
+
+  // Tesla T logo
+  ctx.fillStyle = '#dc2626';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('T', tx+195, ty+50);
+}
+
+// ============================================================
+// LUMBER PILES AND GRADING
+// ============================================================
+function lumberYard(t) {
+  const bx = HX + HW + MAX_LAYERS*LAYER + 30;
+  const by = GY - 10;
+
+  // Three sorted stacks
+  const stacks = [
+    { label: 'BIRCH FACE', col: P.birch, colD: P.birchD, count: 6 },
+    { label: 'SITE CORE', col: P.clt, colD: P.cltD, count: 8 },
+    { label: 'REDWOOD', col: P.redwood, colD: P.redwoodD, count: 5 }
+  ];
+
+  stacks.forEach((s, i) => {
+    const sx = bx + i * 75;
+    // Boards stacked
+    for (let b = 0; b < s.count; b++) {
+      const bxp = sx;
+      const byp = by - b * 6;
+      ctx.fillStyle = s.col;
+      ctx.fillRect(bxp, byp, 60, 5);
+      ctx.strokeStyle = s.colD;
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(bxp, byp, 60, 5);
+      // End grain
+      ctx.fillStyle = s.colD;
+      ctx.fillRect(bxp, byp, 3, 5);
+      ctx.fillRect(bxp+57, byp, 3, 5);
+      // Grain lines
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.beginPath();
+      ctx.moveTo(bxp+3, byp+2);
+      ctx.lineTo(bxp+57, byp+2);
+      ctx.stroke();
+    }
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.fillText(s.label, sx, by - s.count*6 - 6);
+  });
+}
+
+// ============================================================
+// ROBOT ARM (articulated)
+// ============================================================
+function robotArm(baseX, baseY, reachX, reachY, opts={}) {
+  const { tool='grip', glow=false, t=0 } = opts;
+
+  // Base
+  ctx.fillStyle = P.robotD;
+  roundRect(baseX-12, baseY-4, 24, 8, 2); ctx.fill();
+  ctx.fillStyle = P.robot;
+  roundRect(baseX-10, baseY-2, 20, 4, 2); ctx.fill();
+
+  // Calculate arm segments (2-joint IK)
+  const dx = reachX - baseX;
+  const dy = reachY - baseY;
+  const dist = Math.min(Math.sqrt(dx*dx+dy*dy), 150);
+  const seg = 85;
+  const a = Math.atan2(dy, dx);
+  const c = Math.acos(Math.min(1, dist/(2*seg)));
+  const a1 = a - c;
+  const a2 = a + c;
+  const jx = baseX + Math.cos(a1)*seg;
+  const jy = baseY + Math.sin(a1)*seg;
+
+  // Upper arm
+  ctx.strokeStyle = P.robot;
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(baseX, baseY);
+  ctx.lineTo(jx, jy);
+  ctx.stroke();
+  ctx.strokeStyle = P.robotL;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(baseX, baseY);
+  ctx.lineTo(jx, jy);
+  ctx.stroke();
+
+  // Forearm
+  ctx.strokeStyle = P.robot;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(jx, jy);
+  ctx.lineTo(reachX, reachY);
+  ctx.stroke();
+  ctx.strokeStyle = P.robotL;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(jx, jy);
+  ctx.lineTo(reachX, reachY);
+  ctx.stroke();
+
+  // Joints
+  ctx.fillStyle = P.robotD;
+  ctx.beginPath(); ctx.arc(baseX, baseY, 5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(jx, jy, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = P.highlight;
+  ctx.beginPath(); ctx.arc(baseX, baseY, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(jx, jy, 2, 0, Math.PI*2); ctx.fill();
+
+  // Tool head
+  const toolAng = Math.atan2(reachY - jy, reachX - jx);
+  if (tool === 'screw') {
+    // Screwdriver
+    ctx.fillStyle = P.steelL;
+    ctx.save();
+    ctx.translate(reachX, reachY);
+    ctx.rotate(toolAng);
+    ctx.fillRect(0, -3, 12, 6);
+    const spin = Math.sin(t*20)*0.5;
+    ctx.fillStyle = P.steelD;
+    ctx.fillRect(10, -2+spin, 4, 4);
+    ctx.restore();
+  } else if (tool === 'adhesive') {
+    // Glue nozzle
+    ctx.fillStyle = P.highlight;
+    ctx.save();
+    ctx.translate(reachX, reachY);
+    ctx.rotate(toolAng);
+    ctx.fillRect(0, -4, 10, 8);
+    ctx.beginPath();
+    ctx.moveTo(10, -2); ctx.lineTo(14, 0); ctx.lineTo(10, 2);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // Bead
+    ctx.fillStyle = 'rgba(240,200,100,0.9)';
+    ctx.beginPath();
+    ctx.arc(reachX+Math.cos(toolAng)*15, reachY+Math.sin(toolAng)*15, 2, 0, Math.PI*2);
+    ctx.fill();
+  } else if (tool === 'cut') {
+    // Cutting tool with sparks
+    ctx.fillStyle = P.steelL;
+    ctx.save();
+    ctx.translate(reachX, reachY);
+    ctx.rotate(toolAng);
+    ctx.beginPath();
+    ctx.arc(8, 0, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    // Sparks
+    ctx.fillStyle = P.highlight;
+    for (let s = 0; s < 5; s++) {
+      const sa = Math.random()*Math.PI*2;
+      const sd = 5 + Math.random()*10;
+      ctx.beginPath();
+      ctx.arc(reachX+Math.cos(toolAng)*15+Math.cos(sa)*sd,
+              reachY+Math.sin(toolAng)*15+Math.sin(sa)*sd, 1, 0, Math.PI*2);
+      ctx.fill();
+    }
+  } else {
+    // Default gripper
+    ctx.fillStyle = P.highlight;
+    ctx.beginPath(); ctx.arc(reachX, reachY, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  if (glow) {
+    ctx.shadowColor = P.robot;
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = P.robotGlow;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(jx, jy);
+    ctx.lineTo(reachX, reachY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ============================================================
+// RAIL SYSTEM
+// ============================================================
+function railSystem(y, leftX, rightX) {
+  ctx.fillStyle = gradientFill(leftX, y-4, leftX, y+4, [
+    [0, P.robotL], [0.5, P.robot], [1, P.robotD]
+  ]);
+  ctx.fillRect(leftX, y-3, rightX-leftX, 6);
+  // Rail detail
+  ctx.strokeStyle = P.robotL;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(leftX, y);
+  ctx.lineTo(rightX, y);
+  ctx.stroke();
+  // Support brackets
+  for (let x = leftX; x <= rightX; x += 40) {
+    ctx.fillStyle = P.robotD;
+    ctx.fillRect(x-2, y+3, 4, 6);
+  }
+}
+
+// ============================================================
+// RADIANT FLOOR
+// ============================================================
+function radiantFloor(t) {
+  const lx = HX - MAX_LAYERS*LAYER + 5;
+  const rx = HX + HW + MAX_LAYERS*LAYER - 5;
+  const fw = rx - lx;
+  const fy = GY - 15;
+
+  // Floor base
+  ctx.fillStyle = gradientFill(lx, fy, lx, fy+10, [
+    [0, P.cltD], [1, '#4a3010']
+  ]);
+  ctx.fillRect(lx, fy, fw, 12);
+
+  // Radiant tubing (serpentine)
+  ctx.strokeStyle = P.radiant;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = P.radiant;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  let dir = 1;
+  let y = fy + 4;
+  ctx.moveTo(lx + 15, y);
+  for (let row = 0; row < 4; row++) {
+    const ex = dir > 0 ? rx - 15 : lx + 15;
+    ctx.lineTo(ex, y);
+    if (row < 3) {
+      ctx.arc(ex, y + 3, 3, dir > 0 ? -Math.PI/2 : Math.PI/2, dir > 0 ? Math.PI/2 : 3*Math.PI/2, dir<0);
+      y += 6;
+    }
+    dir *= -1;
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.lineCap = 'butt';
+
+  // Heat shimmer
+  const p = pulse(t, 2);
+  ctx.fillStyle = `rgba(249,115,22,${0.05 + p*0.05})`;
+  ctx.fillRect(lx, fy - 15, fw, 15);
+}
+
+// ============================================================
+// ROOF PANEL (pitched, detailed)
+// ============================================================
+function cltRoof(showSolar=false, solarCount=0, t=0, showSystems=false) {
+  const lx = HX - MAX_LAYERS*LAYER;
+  const rx = HX + HW + MAX_LAYERS*LAYER;
+  const baseY = HY - 6;
+  const peakY = RPEAK_Y + 20;
+  const thick = 18;
+
+  // Bottom surface (ceiling face)
+  ctx.fillStyle = P.cltD;
+  ctx.beginPath();
+  ctx.moveTo(lx, baseY);
+  ctx.lineTo(HX+HW/2, peakY);
+  ctx.lineTo(rx, baseY);
+  ctx.lineTo(rx, baseY+thick);
+  ctx.lineTo(HX+HW/2, peakY+thick);
+  ctx.lineTo(lx, baseY+thick);
+  ctx.closePath();
+  ctx.fill();
+
+  // Top surface
+  ctx.fillStyle = gradientFill(lx, baseY-10, rx, baseY-10, [
+    [0, P.cltL], [0.5, P.clt], [1, P.cltD]
+  ]);
+  ctx.beginPath();
+  ctx.moveTo(lx, baseY);
+  ctx.lineTo(HX+HW/2, peakY);
+  ctx.lineTo(rx, baseY);
+  ctx.lineTo(rx-4, baseY-4);
+  ctx.lineTo(HX+HW/2, peakY-4);
+  ctx.lineTo(lx+4, baseY-4);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lamination lines on edge
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 0.8;
+  for (let i = 1; i < 5; i++) {
+    const oy = baseY + i * (thick/5);
+    ctx.beginPath();
+    ctx.moveTo(lx, oy);
+    ctx.lineTo(HX+HW/2, peakY + i * (thick/5));
+    ctx.lineTo(rx, oy);
+    ctx.stroke();
+  }
+
+  // Wood grain on top
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 0.6;
+  for (let i = 0; i < 12; i++) {
+    const gl = i * (HX+HW/2 - lx) / 12;
+    ctx.beginPath();
+    ctx.moveTo(lx + gl, baseY - 3);
+    ctx.lineTo(HX+HW/2 - 5 + i*0.5, peakY - 2);
+    ctx.stroke();
+  }
+
+  if (showSystems) {
+    // Cutaway showing battery and HVAC
+    ctx.fillStyle = P.batt;
+    ctx.fillRect(HX+20, peakY+5, 40, 10);
+    ctx.fillStyle = P.battL;
+    ctx.fillRect(HX+22, peakY+6, 36, 3);
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 6px sans-serif';
+    ctx.fillText('TESLA M3 BATTERY', HX+22, peakY+12);
+
+    ctx.fillStyle = P.hvac;
+    ctx.fillRect(HX+HW-60, peakY+5, 40, 10);
+    ctx.fillStyle = P.hvacL;
+    ctx.fillRect(HX+HW-58, peakY+6, 36, 3);
+    ctx.fillStyle = 'white';
+    ctx.fillText('HVAC + DUCTS', HX+HW-58, peakY+12);
+  }
+
+  // Solar panels
+  if (showSolar && solarCount > 0) {
+    const count = Math.min(solarCount, 8);
+    for (let i = 0; i < count; i++) {
+      const px = lx + 20 + i * 52;
+      const py = baseY - 4 - i * 7 - 4;
+      // Panel frame
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(px-1, py-1, 47, 22);
+      // Panel face
+      ctx.fillStyle = P.solar;
+      ctx.fillRect(px, py, 45, 20);
+      // Cells
+      for (let cx = 0; cx < 3; cx++) {
+        for (let cy = 0; cy < 2; cy++) {
+          ctx.fillStyle = P.solarCell;
+          ctx.fillRect(px + cx*15 + 1, py + cy*10 + 1, 13, 8);
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 0.4;
+          ctx.strokeRect(px + cx*15 + 1, py + cy*10 + 1, 13, 8);
+          // Highlight
+          ctx.fillStyle = 'rgba(100,200,255,0.15)';
+          ctx.fillRect(px + cx*15 + 2, py + cy*10 + 2, 5, 2);
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// FIBER NETWORK VISUALIZATION
+// ============================================================
+function fiberNetwork(t) {
+  const p = pulse(t, 2.5) * 0.4 + 0.6;
+  const lx = HX - MAX_LAYERS*LAYER;
+  const rx = HX + HW + MAX_LAYERS*LAYER;
+
+  ctx.shadowColor = P.fiber;
+  ctx.shadowBlur = 10 * p;
+  ctx.strokeStyle = `rgba(0,255,136,${0.5*p})`;
+  ctx.lineWidth = 1.2;
+
+  // Horizontal wall runs
+  for (let y = HY + 25; y < GY - 20; y += 35) {
+    ctx.beginPath();
+    ctx.moveTo(lx+2, y);
+    ctx.lineTo(rx-2, y);
+    ctx.stroke();
+  }
+  // Vertical wall runs
+  for (let i = 0; i < 4; i++) {
+    const offset = i * 3;
+    ctx.beginPath();
+    ctx.moveTo(lx+offset, HY);
+    ctx.lineTo(lx+offset, GY-15);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(rx-offset, HY);
+    ctx.lineTo(rx-offset, GY-15);
+    ctx.stroke();
+  }
+  // Roof network
+  ctx.beginPath();
+  ctx.moveTo(lx, HY-5);
+  ctx.lineTo(HX+HW/2, RPEAK_Y+20);
+  ctx.lineTo(rx, HY-5);
+  ctx.stroke();
+  // Floor
+  ctx.beginPath();
+  ctx.moveTo(lx+10, GY-8);
+  ctx.lineTo(rx-10, GY-8);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Traveling pulses
+  for (let pulse_i = 0; pulse_i < 3; pulse_i++) {
+    const pos = ((t * 0.3 + pulse_i * 0.33) % 1);
+    const px = lx + (rx-lx) * pos;
+    const py = HY + 60 + pulse_i * 40;
+    ctx.fillStyle = P.fiber;
+    ctx.shadowColor = P.fiber;
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // Status label
+  ctx.fillStyle = `rgba(0,255,136,${p})`;
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('◉ BRILLOUIN FIBER NETWORK ACTIVE', HX+HW/2, RPEAK_Y - 15);
+  ctx.textAlign = 'left';
+}
+
+// ============================================================
+// SCAN LINES
+// ============================================================
+function scanLines(t) {
+  const p = pulse(t, 3);
+  const sweepY = HY + ((t * 80) % (HH + 40)) - 20;
+
+  // Horizontal grid
+  ctx.strokeStyle = `rgba(0,255,136,${0.15 + p*0.15})`;
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([3,3]);
+  for (let y = HY - 20; y < GY; y += 12) {
+    ctx.beginPath();
+    ctx.moveTo(HX-40, y);
+    ctx.lineTo(HX+HW+40, y);
+    ctx.stroke();
+  }
+  for (let x = HX-20; x < HX+HW+20; x += 20) {
+    ctx.beginPath();
+    ctx.moveTo(x, HY-20);
+    ctx.lineTo(x, GY);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Active sweep line
+  ctx.strokeStyle = `rgba(0,255,136,${0.8})`;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = P.fiber;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(HX-30, sweepY);
+  ctx.lineTo(HX+HW+30, sweepY);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Corner brackets
+  const corners = [
+    [HX-15, HY-15, 1, 1],
+    [HX+HW+15, HY-15, -1, 1],
+    [HX-15, GY+5, 1, -1],
+    [HX+HW+15, GY+5, -1, -1]
+  ];
+  ctx.strokeStyle = `rgba(255,215,0,${0.8+p*0.2})`;
+  ctx.lineWidth = 2;
+  corners.forEach(([x,y,sx,sy])=>{
+    ctx.beginPath();
+    ctx.moveTo(x+sx*18, y);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x, y+sy*18);
+    ctx.stroke();
+  });
+
+  // Scanner tripod to the left
+  const tx = HX - 100;
+  const ty = GY;
+  // Tripod legs
+  ctx.strokeStyle = P.steel;
+  ctx.lineWidth = 2;
+  [[-8, 0], [0, -4], [8, 0]].forEach(([ox, oy]) => {
+    ctx.beginPath();
+    ctx.moveTo(tx, ty-50);
+    ctx.lineTo(tx+ox*2, ty);
+    ctx.stroke();
+  });
+  // Scanner head
+  ctx.fillStyle = P.steelD;
+  ctx.beginPath();
+  ctx.arc(tx, ty-58, 8, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = P.highlight;
+  ctx.beginPath();
+  ctx.arc(tx, ty-58, 4, 0, Math.PI*2);
+  ctx.fill();
+  // Laser beam
+  ctx.strokeStyle = `rgba(255,0,0,${0.6})`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = '#f00';
+  ctx.shadowBlur = 5;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty-58);
+  ctx.lineTo(HX, sweepY);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Data readout
+  ctx.fillStyle = `rgba(0,255,136,${0.7})`;
+  ctx.font = '9px monospace';
+  ctx.fillText('X: 0380.2mm', tx-30, ty-90);
+  ctx.fillText('Y: ' + Math.floor((sweepY-HY)*2).toString().padStart(4,'0') + '.8mm', tx-30, ty-78);
+  ctx.fillText('SCANNING...', tx-30, ty-66);
+}
+
+// ============================================================
+// INSET / DETAIL PANEL
+// ============================================================
+function drawInset(title, drawFn) {
+  // Frame
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  roundRect(INSET_X, INSET_Y, INSET_W, INSET_H, 6);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(196,145,58,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Title bar
+  ctx.fillStyle = 'rgba(196,145,58,0.15)';
+  ctx.fillRect(INSET_X, INSET_Y, INSET_W, 18);
+  ctx.fillStyle = P.clt;
+  ctx.font = 'bold 9px sans-serif';
+  ctx.fillText('⊕ ' + title, INSET_X + 6, INSET_Y + 12);
+
+  // Clip to inset
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(INSET_X + 2, INSET_Y + 20, INSET_W - 4, INSET_H - 22);
+  ctx.clip();
+
+  drawFn(INSET_X + INSET_W/2, INSET_Y + 20 + (INSET_H-22)/2);
+
+  ctx.restore();
+}
+
+// ============================================================
+// DETAIL: CLT cross-section close-up
+// ============================================================
+function insetCLTCrossSection(cx, cy) {
+  // Show 5 layers with grain visible
+  const lw = 30;
+  const lh = 80;
+  const layers = [P.birch, P.clt, P.cltD, P.clt, P.redwood];
+  const labels = ['Birch', 'Core', 'Core', 'Core', 'Redwood'];
+  layers.forEach((col, i) => {
+    const lx = cx - 75 + i * lw;
+    ctx.fillStyle = col;
+    ctx.fillRect(lx, cy - lh/2, lw, lh);
+    // Grain
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 0.8;
+    if (i % 2 === 0) {
+      for (let g = 0; g < 4; g++) {
+        ctx.beginPath();
+        ctx.moveTo(lx, cy - lh/2 + g*20 + 5);
+        ctx.lineTo(lx+lw, cy - lh/2 + g*20 + 5);
+        ctx.stroke();
+      }
+    } else {
+      for (let g = 0; g < 3; g++) {
+        ctx.beginPath();
+        ctx.moveTo(lx + g*10 + 5, cy - lh/2);
+        ctx.lineTo(lx + g*10 + 5, cy + lh/2);
+        ctx.stroke();
+      }
+    }
+    // Label
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.font = '7px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[i], lx+lw/2, cy+lh/2+10);
+  });
+  ctx.textAlign = 'left';
+
+  // Adhesive lines
+  ctx.strokeStyle = 'rgba(240,200,100,0.9)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx - 75 + i*lw, cy - lh/2);
+    ctx.lineTo(cx - 75 + i*lw, cy + lh/2);
+    ctx.stroke();
+  }
+}
+
+function insetFiberDetail(cx, cy, t) {
+  // Show fiber embedded in wood with light traveling
+  ctx.fillStyle = P.clt;
+  ctx.fillRect(cx-80, cy-30, 160, 60);
+  // Grain
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 0.5;
+  for (let g = 0; g < 15; g++) {
+    ctx.beginPath();
+    ctx.moveTo(cx-80, cy-30+g*4);
+    ctx.lineTo(cx+80, cy-30+g*4);
+    ctx.stroke();
+  }
+  // Fiber cable
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx-80, cy);
+  ctx.lineTo(cx+80, cy);
+  ctx.stroke();
+  // Core glow
+  const p = pulse(t, 3);
+  ctx.shadowColor = P.fiber;
+  ctx.shadowBlur = 10*p;
+  ctx.strokeStyle = `rgba(0,255,136,${0.7+p*0.3})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx-80, cy);
+  ctx.lineTo(cx+80, cy);
+  ctx.stroke();
+  // Traveling pulse
+  const px = cx - 80 + ((t*0.5) % 1) * 160;
+  ctx.fillStyle = P.fiber;
+  ctx.beginPath();
+  ctx.arc(px, cy, 3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Label
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '8px sans-serif';
+  ctx.fillText('Fiber embedded in lamination', cx-60, cy+25);
+}
+
+function insetPipeChamber(cx, cy, t) {
+  // Pipe cross-section showing lumber inside with vacuum
+  ctx.fillStyle = P.steelD;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 55, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = P.steel;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 50, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#1a2540';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 48, 0, Math.PI*2);
+  ctx.fill();
+  // Lumber inside
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 6; j++) {
+      const lx = cx - 25 + j*9;
+      const ly = cy - 25 + i*9;
+      const d = Math.hypot(lx-cx, ly-cy);
+      if (d < 40) {
+        ctx.fillStyle = i%2 ? P.clt : P.cltD;
+        ctx.fillRect(lx, ly, 7, 7);
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 0.3;
+        ctx.strokeRect(lx, ly, 7, 7);
+      }
+    }
+  }
+  // Vacuum swirl effect
+  const p = pulse(t, 2);
+  ctx.strokeStyle = `rgba(100,200,255,${0.3*p})`;
+  ctx.lineWidth = 0.8;
+  for (let a = 0; a < Math.PI*2; a += Math.PI/6) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30 + Math.sin(a+t*2)*8, a, a + Math.PI/8);
+    ctx.stroke();
+  }
+  // Label
+  ctx.fillStyle = 'rgba(100,200,255,0.9)';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('VAC: -28 inHg', cx, cy-40);
+  ctx.fillText('MC: 12%', cx, cy+50);
+  ctx.textAlign = 'left';
+}
+
+function insetRobotDetail(cx, cy, t) {
+  // Close up of robot arm doing work
+  robotArm(cx-70, cy+30, cx+30+Math.sin(t*2)*10, cy-20, {tool:'screw', t});
+  // CLT surface being worked on
+  ctx.fillStyle = P.clt;
+  ctx.fillRect(cx-90, cy+35, 180, 15);
+  ctx.fillStyle = P.cltD;
+  ctx.fillRect(cx-90, cy+50, 180, 5);
+  // Screws placed
+  for (let i = 0; i < 6; i++) {
+    const sx = cx - 80 + i * 28;
+    ctx.fillStyle = P.steelL;
+    ctx.beginPath();
+    ctx.arc(sx, cy+40, 2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = P.steelD;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(sx-2, cy+40);
+    ctx.lineTo(sx+2, cy+40);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '8px sans-serif';
+  ctx.fillText('Screw-driven lamination', cx-60, cy-40);
+}
+
+function insetAdhesiveBead(cx, cy, t) {
+  // Two boards with adhesive bead
+  ctx.fillStyle = P.clt;
+  ctx.fillRect(cx-60, cy-25, 120, 20);
+  ctx.fillStyle = P.cltD;
+  ctx.fillRect(cx-60, cy+8, 120, 20);
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 0.5;
+  for (let g = 0; g < 5; g++) {
+    ctx.beginPath();
+    ctx.moveTo(cx-60, cy-23+g*4);
+    ctx.lineTo(cx+60, cy-23+g*4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx-60, cy+10+g*4);
+    ctx.lineTo(cx+60, cy+10+g*4);
+    ctx.stroke();
+  }
+  // Adhesive bead between
+  ctx.fillStyle = 'rgba(240,200,100,0.9)';
+  ctx.fillRect(cx-60, cy-3, 120, 8);
+  // Glisten
+  ctx.fillStyle = 'rgba(255,240,180,0.7)';
+  ctx.fillRect(cx-55, cy-2, 110, 2);
+  // Label
+  ctx.fillStyle = P.highlight;
+  ctx.font = 'bold 8px sans-serif';
+  ctx.fillText('PU adhesive bond line', cx-50, cy-35);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('Board A', cx-55, cy-12);
+  ctx.fillText('Board B', cx-55, cy+22);
+}
+
+function insetUVCure(cx, cy, t) {
+  // UV cure happening at bond line
+  ctx.fillStyle = P.clt;
+  ctx.fillRect(cx-60, cy-25, 120, 50);
+  // Bond line
+  ctx.fillStyle = 'rgba(240,200,100,0.9)';
+  ctx.fillRect(cx-60, cy-2, 120, 4);
+  // Fiber optic in bond line
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx-60, cy);
+  ctx.lineTo(cx+60, cy);
+  ctx.stroke();
+  // UV light emission
+  const p = pulse(t, 4);
+  ctx.shadowColor = P.uv;
+  ctx.shadowBlur = 20*p;
+  for (let i = 0; i < 8; i++) {
+    const rx = cx - 50 + i * 14;
+    ctx.fillStyle = `rgba(168,85,247,${0.7*p})`;
+    ctx.beginPath();
+    ctx.arc(rx, cy, 4, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = P.uv;
+  ctx.font = 'bold 8px sans-serif';
+  ctx.fillText('UV CURING - Fiber delivery', cx-55, cy-35);
+}
+
+function insetVacuumCavity(cx, cy, t) {
+  // Wall cross-section with vacuum cavity
+  const ws = [[P.birch,15],[P.clt,12],[P.cltD,12],['#1a2540',25],[P.cltD,12],[P.clt,12],[P.redwood,15]];
+  let off = 0;
+  const totalW = ws.reduce((a,w)=>a+w[1], 0);
+  const startX = cx - totalW/2;
+  ws.forEach(([col, w], i) => {
+    ctx.fillStyle = col;
+    ctx.fillRect(startX+off, cy-40, w, 80);
+    if (i === 3) {
+      // Vacuum cavity
+      ctx.strokeStyle = `rgba(100,200,255,${0.3+pulse(t,2)*0.3})`;
+      ctx.lineWidth = 1;
+      for (let j = 0; j < 4; j++) {
+        ctx.beginPath();
+        ctx.moveTo(startX+off+3, cy-40+j*20+5);
+        ctx.lineTo(startX+off+w-3, cy-40+j*20+5);
+        ctx.stroke();
+      }
+    }
+    off += w;
+  });
+  ctx.fillStyle = 'rgba(100,200,255,0.9)';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('VAC CAVITY', cx, cy-50);
+  ctx.fillText('R-30/inch', cx, cy+55);
+  ctx.textAlign = 'left';
+}
+
+function insetPierDrive(cx, cy, t) {
+  // Ground section showing pier going in
+  ctx.fillStyle = '#2a1a08';
+  ctx.fillRect(cx-60, cy-10, 120, 60);
+  // Soil strata
+  ctx.fillStyle = '#3d2818';
+  ctx.fillRect(cx-60, cy+5, 120, 8);
+  ctx.fillStyle = '#1a0f04';
+  ctx.fillRect(cx-60, cy+25, 120, 8);
+  // Pier shaft with auger
+  ctx.fillStyle = P.steel;
+  ctx.fillRect(cx-3, cy-25, 6, 70);
+  // Helical flights going down
+  const depth = t * 0.4;
+  ctx.strokeStyle = P.steelL;
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 6; i++) {
+    const fy = cy - 20 + i * 10 + depth * 20;
+    if (fy < cy + 50) {
+      ctx.beginPath();
+      ctx.ellipse(cx, fy, 10, 3, 0, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+  // Rotation indicator
+  ctx.strokeStyle = P.highlight;
+  ctx.lineWidth = 1;
+  const rot = t * 8;
+  ctx.beginPath();
+  ctx.arc(cx, cy-25, 12, rot, rot + Math.PI*1.5);
+  ctx.stroke();
+  // Arrow
+  ctx.fillStyle = P.highlight;
+  ctx.beginPath();
+  ctx.moveTo(cx+Math.cos(rot+Math.PI*1.5)*12, cy-25+Math.sin(rot+Math.PI*1.5)*12);
+  ctx.lineTo(cx+Math.cos(rot+Math.PI*1.3)*14, cy-25+Math.sin(rot+Math.PI*1.3)*14);
+  ctx.lineTo(cx+Math.cos(rot+Math.PI*1.7)*14, cy-25+Math.sin(rot+Math.PI*1.7)*14);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '8px sans-serif';
+  ctx.fillText('Helical pier → bedrock', cx-40, cy-35);
+}
+
+// ============================================================
+// SCALE FIGURES (people for scale)
+// ============================================================
+function person(x, y, color='#c4913a') {
+  // Hard hat
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath();
+  ctx.arc(x, y-18, 3, Math.PI, Math.PI*2);
+  ctx.fill();
+  ctx.fillRect(x-3, y-18, 6, 1);
+  // Head
+  ctx.fillStyle = '#fbd4a8';
+  ctx.beginPath();
+  ctx.arc(x, y-14, 2.5, 0, Math.PI*2);
+  ctx.fill();
+  // Body
+  ctx.fillStyle = color;
+  ctx.fillRect(x-3, y-12, 6, 8);
+  // Safety vest stripe
+  ctx.fillStyle = '#fef3c7';
+  ctx.fillRect(x-3, y-9, 6, 1.5);
+  // Legs
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fillRect(x-3, y-4, 2, 5);
+  ctx.fillRect(x+1, y-4, 2, 5);
+}
+
+// ============================================================
+// SYSTEMS DASHBOARD
+// ============================================================
+function systemsDash(t) {
+  const p = pulse(t, 2);
+  const items = [
+    { y: 90, col: '#fbbf24', icon: '☀', lbl: 'SOLAR', val: '4.2 kW', ind: 'Charging' },
+    { y: 130, col: '#3b82f6', icon: '🔋', lbl: 'BATTERY', val: '94%', ind: '76 kWh' },
+    { y: 170, col: P.radiant, icon: '♨', lbl: 'RADIANT', val: '68°F', ind: 'ON' },
+    { y: 210, col: '#67e8f9', icon: '❄', lbl: 'CLIMATE', val: '71°F', ind: 'Auto' },
+    { y: 250, col: P.fiber, icon: '⬡', lbl: 'FIBER OK', val: '24k sensors', ind: 'Nominal' },
+    { y: 290, col: '#a78bfa', icon: '🛡', lbl: 'SECURITY', val: 'Armed', ind: '0 alerts' },
+  ];
+
+  const dx = 18;
+  items.forEach(({y, col, icon, lbl, val, ind}) => {
+    const pp = pulse(t + y*0.01, 2);
+    // Card
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(dx, y, 148, 32, 4);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${hexRgb(col)}, 0.4)`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Icon square
+    ctx.fillStyle = `rgba(${hexRgb(col)}, 0.2)`;
+    ctx.fillRect(dx+4, y+4, 24, 24);
+    ctx.fillStyle = col;
+    ctx.font = '14px sans-serif';
+    ctx.fillText(icon, dx+8, y+22);
+    // Text
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText(lbl, dx+32, y+13);
+    ctx.fillStyle = col;
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(val, dx+32, y+26);
+    // Status indicator dot
+    ctx.fillStyle = col;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 6*pp;
+    ctx.beginPath();
+    ctx.arc(dx+140, y+8, 2.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '7px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(ind, dx+142, y+26);
+    ctx.textAlign = 'left';
+  });
+}
+
+function hexRgb(hex) {
+  if (hex.startsWith('#')) {
+    const n = parseInt(hex.slice(1), 16);
+    return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
+  }
+  return '255,255,255';
+}
+
+// ============================================================
+// LABELS / ANNOTATIONS
+// ============================================================
+function annotate(x, y, text, tx, ty, col='rgba(255,255,255,0.7)') {
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([2,2]);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(tx, ty);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = col;
+  ctx.font = '9px sans-serif';
+  ctx.fillText(text, tx+3, ty+3);
+  ctx.beginPath();
+  ctx.arc(x, y, 2, 0, Math.PI*2);
+  ctx.fill();
+}
+
+// ============================================================
+// OLD HOUSE INSIDE CLT (faded)
+// ============================================================
+function oldHouseInCLT(alpha, t) {
+  const thick = MAX_LAYERS * LAYER;
+  ctx.globalAlpha = alpha;
+  // Walls
+  ctx.fillStyle = P.oldWall;
+  ctx.fillRect(HX + thick, HY, HW - thick*2, HH);
+  // Windows
+  ctx.fillStyle = P.oldWin;
+  ctx.fillRect(HX + thick + 20, HY+40, 40, 40);
+  ctx.fillRect(HX + HW - thick - 60, HY+40, 40, 40);
+  // Roof
+  ctx.fillStyle = P.oldRoof;
+  ctx.beginPath();
+  ctx.moveTo(HX + thick, HY);
+  ctx.lineTo(HX + HW/2, RPEAK_Y + 30);
+  ctx.lineTo(HX + HW - thick, HY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function framingInside(alpha) {
+  const thick = MAX_LAYERS * LAYER;
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = P.oldWall;
+  ctx.lineWidth = 3;
+  // Studs
+  for (let x = HX + thick + 15; x < HX + HW - thick - 10; x += 30) {
+    ctx.beginPath();
+    ctx.moveTo(x, HY + 5);
+    ctx.lineTo(x, GY - 15);
+    ctx.stroke();
+  }
+  // Plates
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(HX + thick + 5, HY + 5);
+  ctx.lineTo(HX + HW - thick - 5, HY + 5);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(HX + thick + 5, GY - 15);
+  ctx.lineTo(HX + HW - thick - 5, GY - 15);
+  ctx.stroke();
+  // Header beams
+  ctx.lineWidth = 4;
+  for (let y = HY + 40; y < GY; y += 60) {
+    ctx.beginPath();
+    ctx.moveTo(HX + thick + 5, y);
+    ctx.lineTo(HX + HW - thick - 5, y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// FLOOR PANEL (CLT slab)
+// ============================================================
+function floorPanel() {
+  const lx = HX - MAX_LAYERS*LAYER;
+  const fw = HW + MAX_LAYERS*LAYER*2;
+  // CLT floor panel
+  ctx.fillStyle = gradientFill(lx, GY-20, lx, GY-5, [
+    [0, P.clt], [1, P.cltD]
+  ]);
+  ctx.fillRect(lx, GY-20, fw, 15);
+  // Wood grain
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 0.5;
+  for (let x = lx; x < lx+fw; x += 8) {
+    ctx.beginPath();
+    ctx.moveTo(x, GY-20);
+    ctx.lineTo(x, GY-5);
+    ctx.stroke();
+  }
+  // Edge shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(lx, GY-8, fw, 3);
+}
+
+// ============================================================
+// FINISHED EXTERIOR
+// ============================================================
+function finishedExterior(glow=false, t=0) {
+  const lx = HX - MAX_LAYERS*LAYER;
+  const rx = HX + HW + MAX_LAYERS*LAYER;
+  // Walls
+  cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+  // Foundation
+  ctx.fillStyle = P.concD;
+  ctx.fillRect(lx-8, GY-12, rx-lx+16, 12);
+  ctx.fillStyle = P.conc;
+  ctx.fillRect(lx-8, GY-12, rx-lx+16, 3);
+  // Roof with solar
+  cltRoof(true, 8, t);
+  // Recessed windows (birch faced trim)
+  ctx.fillStyle = P.oldWin;
+  [[lx+2, HY+45], [rx-18, HY+45]].forEach(([x,y])=>{
+    ctx.fillRect(x, y, 16, 55);
+    ctx.strokeStyle = P.birchD;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x-1, y-1, 18, 57);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x+8, y); ctx.lineTo(x+8, y+55);
+    ctx.stroke();
+  });
+  // Door (birch faced)
+  ctx.fillStyle = P.birch;
+  ctx.fillRect(HX+HW/2-22, GY-78, 44, 78);
+  ctx.fillStyle = P.birchD;
+  ctx.fillRect(HX+HW/2-22, GY-78, 44, 3);
+  ctx.strokeStyle = '#5a4020';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(HX+HW/2-22, GY-78, 44, 78);
+  // Glass insert
+  ctx.fillStyle = P.oldWin;
+  ctx.fillRect(HX+HW/2-15, GY-70, 30, 30);
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillRect(HX+HW/2-13, GY-68, 8, 15);
+
+  if (glow) {
+    const p = pulse(t, 1.5) * 0.3 + 0.7;
+    // Window glow
+    ctx.fillStyle = `rgba(255,220,150,${0.5*p})`;
+    ctx.shadowColor = '#ffdc96';
+    ctx.shadowBlur = 15*p;
+    ctx.fillRect(lx+2, HY+45, 16, 55);
+    ctx.fillRect(rx-18, HY+45, 16, 55);
+    ctx.fillRect(HX+HW/2-15, GY-70, 30, 30);
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ============================================================
+// STEP DEFINITIONS (30 steps with rich scenes)
+// ============================================================
+// ============================================================
+// V3 EXPANDED DETAIL HELPERS
+// ============================================================
+
+// Visible screws driven into CLT — depth animates
+function screwArray(layerIdx, side, count, t) {
+  const spacing = HH / (count+1);
+  const x = side === 'L' ? HX - (layerIdx+0.5)*LAYER : HX + HW + (layerIdx+0.5)*LAYER;
+  for (let i = 0; i < count; i++) {
+    const y = HY + (i+1)*spacing;
+    const driven = Math.min(1, (t*0.4 + i*0.08) % 1.5);
+    const len = 10*driven;
+    // Screw head
+    ctx.fillStyle = P.steelL;
+    ctx.fillRect(x-1.5, y-1, 3, 2);
+    // Shaft
+    ctx.strokeStyle = P.steelD;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (side==='L'?1:-1)*len, y);
+    ctx.stroke();
+    // Threads
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    for (let k = 1; k < len; k += 2) {
+      ctx.beginPath();
+      ctx.moveTo(x+(side==='L'?k:-k), y-0.8);
+      ctx.lineTo(x+(side==='L'?k:-k), y+0.8);
+      ctx.stroke();
+    }
+  }
+}
+
+// Continuous adhesive bead along entire wall edge
+function adhesiveBead(layerIdx, side, t) {
+  const x = side === 'L' ? HX - (layerIdx+1)*LAYER - 1 : HX + HW + layerIdx*LAYER + LAYER;
+  const progress = Math.min(1, t*0.5);
+  const h = HH * progress;
+  const g = ctx.createLinearGradient(x-2, 0, x+2, 0);
+  g.addColorStop(0, 'rgba(240,200,100,0.2)');
+  g.addColorStop(0.5, 'rgba(255,220,140,0.9)');
+  g.addColorStop(1, 'rgba(240,200,100,0.2)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x-1.5, HY, 3, h);
+  // Glistening bead texture
+  ctx.fillStyle = 'rgba(255,240,180,0.7)';
+  for (let y = HY; y < HY + h; y += 5) {
+    ctx.beginPath();
+    ctx.arc(x, y + Math.sin(y*0.3+t*2)*0.5, 1.2, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// Board sliding into place on the current layer
+function slidingBoard(layerIdx, side, t) {
+  const progress = Math.min(1, (t%2)*0.6);
+  const destX = side === 'L' ? HX - (layerIdx+1)*LAYER : HX + HW + layerIdx*LAYER;
+  const startX = side === 'L' ? destX - 120 : destX + 120;
+  const x = startX + (destX - startX) * progress;
+  const boardY = HY + 20 + ((t*40)%(HH-40));
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = P.birch;
+  ctx.fillRect(x, boardY - 2, LAYER, 18);
+  // Grain
+  ctx.strokeStyle = P.birchD;
+  ctx.lineWidth = 0.4;
+  for (let g = 1; g < LAYER; g += 2) {
+    ctx.beginPath();
+    ctx.moveTo(x+g, boardY-2);
+    ctx.lineTo(x+g, boardY+16);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Vacuum pump with hose, gauge, and pressure readout
+function vacuumPump(x, y, t) {
+  // Pump body
+  ctx.fillStyle = P.steelD;
+  roundRect(x, y, 44, 26, 3); ctx.fill();
+  ctx.fillStyle = P.steel;
+  roundRect(x+2, y+2, 40, 12, 2); ctx.fill();
+  // Motor housing
+  ctx.fillStyle = P.steelL;
+  ctx.fillRect(x+30, y+4, 12, 8);
+  // Cooling fins
+  ctx.strokeStyle = P.steelD;
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x+31+i*2, y+4);
+    ctx.lineTo(x+31+i*2, y+12);
+    ctx.stroke();
+  }
+  // Gauge face
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(x+10, y+8, 5, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#444';
+  ctx.stroke();
+  // Needle sweeping toward -28
+  const needleAng = -Math.PI*0.25 - pulse(t, 0.8)*Math.PI*0.9;
+  ctx.strokeStyle = '#ff4444';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x+10, y+8);
+  ctx.lineTo(x+10+Math.cos(needleAng)*4, y+8+Math.sin(needleAng)*4);
+  ctx.stroke();
+  // Pressure display
+  ctx.fillStyle = '#0f0';
+  ctx.font = 'bold 6px monospace';
+  ctx.fillText('-28 inHg', x+18, y+22);
+  // Status LED pulse
+  ctx.fillStyle = `rgba(0,255,100,${0.5+pulse(t,4)*0.5})`;
+  ctx.beginPath(); ctx.arc(x+6, y+22, 1.5, 0, Math.PI*2); ctx.fill();
+  // Hose to wall
+  ctx.strokeStyle = P.steelD;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x+44, y+12);
+  ctx.bezierCurveTo(x+70, y+8, x+80, y-10, x+90, y-25);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(100,200,255,0.6)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
+// Window being CNC cut into the CLT wall (kerf with dust)
+function windowCutout(wx, wy, ww, wh, progress, t) {
+  // Completed cut
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(wx, wy, ww*progress, wh);
+  // Frame already placed
+  if (progress > 0.95) {
+    ctx.strokeStyle = P.steelL;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(wx, wy, ww, wh);
+    // Glass interior
+    ctx.fillStyle = 'rgba(120,200,230,0.15)';
+    ctx.fillRect(wx+2, wy+2, ww-4, wh-4);
+  }
+  // Active cutting head at current edge
+  if (progress > 0 && progress < 1) {
+    const cx = wx + ww*progress;
+    // Router head
+    ctx.fillStyle = P.steelL;
+    ctx.beginPath();
+    ctx.arc(cx, wy+wh/2, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = P.steelD;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    // Spinning bit
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 0.5;
+    const spinAng = t*25;
+    for (let k = 0; k < 3; k++) {
+      const a = spinAng + k*Math.PI*2/3;
+      ctx.beginPath();
+      ctx.moveTo(cx, wy+wh/2);
+      ctx.lineTo(cx+Math.cos(a)*3, wy+wh/2+Math.sin(a)*3);
+      ctx.stroke();
+    }
+    // Sawdust particles
+    for (let s = 0; s < 8; s++) {
+      const sa = (t*3 + s) % (Math.PI*2);
+      const sd = 4 + (s*2)%8;
+      ctx.fillStyle = `rgba(220,180,120,${0.5 - (s/8)*0.5})`;
+      ctx.fillRect(cx+Math.cos(sa)*sd, wy+wh/2+Math.sin(sa)*sd - 4, 1, 1);
+    }
+  }
+}
+
+// Embedded electrical conduit in a lamination layer
+function conduitRun(t) {
+  const lx = HX - 10*LAYER;
+  const rx = HX + HW + 10*LAYER;
+  // Horizontal conduit in lamination
+  ctx.strokeStyle = P.copper;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(lx, HY + 60);
+  ctx.lineTo(rx, HY + 60);
+  ctx.stroke();
+  ctx.strokeStyle = P.copperL;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Junction boxes
+  const boxes = [HX + 40, HX + HW/2, HX + HW - 40];
+  boxes.forEach(bx => {
+    ctx.fillStyle = P.copperL;
+    ctx.fillRect(bx - 4, HY + 56, 8, 8);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(bx - 4, HY + 56, 8, 8);
+  });
+  // Current pulse animation along conduit
+  const pp = (t*0.4) % 1;
+  const px = lx + (rx - lx) * pp;
+  ctx.fillStyle = `rgba(255,200,0,0.9)`;
+  ctx.shadowColor = '#ffaa00';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(px, HY + 60, 2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// Crane with cable, hook, counterweight — descending roof panel
+function crane(t, liftY) {
+  // Base
+  const bx = HX + HW + 200;
+  ctx.fillStyle = P.steelD;
+  ctx.fillRect(bx - 6, GY - 10, 12, 10);
+  // Mast
+  ctx.strokeStyle = P.steelL;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(bx, GY - 10);
+  ctx.lineTo(bx, RPEAK_Y - 60);
+  ctx.stroke();
+  // Lattice
+  ctx.strokeStyle = P.steelD;
+  ctx.lineWidth = 0.8;
+  for (let y = GY - 10; y > RPEAK_Y - 60; y -= 10) {
+    ctx.beginPath();
+    ctx.moveTo(bx - 3, y);
+    ctx.lineTo(bx + 3, y - 5);
+    ctx.moveTo(bx + 3, y);
+    ctx.lineTo(bx - 3, y - 5);
+    ctx.stroke();
+  }
+  // Boom
+  ctx.strokeStyle = P.steelL;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(bx, RPEAK_Y - 60);
+  ctx.lineTo(HX + HW/2, RPEAK_Y - 90);
+  ctx.stroke();
+  // Counterweight
+  ctx.fillStyle = P.steelD;
+  ctx.fillRect(bx + 6, RPEAK_Y - 65, 16, 12);
+  ctx.fillStyle = P.steelL;
+  ctx.fillText('⚞', bx + 9, RPEAK_Y - 56);
+  // Hook cable
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(HX + HW/2, RPEAK_Y - 90);
+  ctx.lineTo(HX + HW/2, liftY);
+  ctx.stroke();
+  // Hook
+  ctx.strokeStyle = P.steelL;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(HX + HW/2, liftY + 2, 3, 0, Math.PI, false);
+  ctx.stroke();
+}
+
+// Lumber stack (organized species pile)
+function lumberStack(x, y, w, count, species, label) {
+  const cols = {
+    'birch': [P.birch, P.birchD],
+    'clt': [P.clt, P.cltD],
+    'redwood': [P.redwood, P.redwoodD],
+  };
+  const [light, dark] = cols[species] || cols.clt;
+  for (let i = 0; i < count; i++) {
+    ctx.fillStyle = i % 2 === 0 ? light : dark;
+    ctx.fillRect(x, y - i*3, w, 2.5);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 0.3;
+    ctx.strokeRect(x, y - i*3, w, 2.5);
+  }
+  if (label) {
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '7px sans-serif';
+    ctx.fillText(label, x, y - count*3 - 4);
+  }
+}
+
+// Ground-penetrating radar scanner sled
+function gprScan(t) {
+  const sx = HX + 80 + Math.sin(t*0.6)*60;
+  const sy = GY - 3;
+  // Sled body
+  ctx.fillStyle = P.robot;
+  roundRect(sx-10, sy-6, 20, 8, 2); ctx.fill();
+  ctx.fillStyle = P.robotL;
+  ctx.fillRect(sx-8, sy-5, 16, 2);
+  // Antenna housing underneath
+  ctx.fillStyle = P.robotD;
+  ctx.fillRect(sx-8, sy+1, 16, 3);
+  // Signal pulses into ground
+  for (let r = 0; r < 3; r++) {
+    const rad = 6 + r*8 + (t*12)%24;
+    ctx.strokeStyle = `rgba(100,220,255,${0.7 - rad/40})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(sx, sy+4, rad, 0, Math.PI);
+    ctx.stroke();
+  }
+  // Data label
+  ctx.fillStyle = P.fiber;
+  ctx.font = '8px monospace';
+  ctx.fillText('GPR ✓', sx - 10, sy - 10);
+}
+
+// Inset: conduit embedded between laminations
+function insetConduit(cx, cy, t) {
+  // Cross-section showing conduit cradled in lamination
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = i % 2 === 0 ? P.clt : P.cltD;
+    ctx.fillRect(cx - 70, cy - 30 + i*12, 140, 10);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.strokeRect(cx - 70, cy - 30 + i*12, 140, 10);
+  }
+  // Conduit running through middle layer
+  ctx.fillStyle = P.copper;
+  ctx.fillRect(cx - 65, cy + 5, 130, 6);
+  ctx.fillStyle = P.copperL;
+  ctx.fillRect(cx - 65, cy + 6, 130, 1);
+  // Wire bundle inside
+  ctx.strokeStyle = '#ff5555';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(cx - 63, cy + 7);
+  ctx.lineTo(cx + 63, cy + 7);
+  ctx.stroke();
+  ctx.strokeStyle = '#5555ff';
+  ctx.beginPath();
+  ctx.moveTo(cx - 63, cy + 9);
+  ctx.lineTo(cx + 63, cy + 9);
+  ctx.stroke();
+  // Pulse
+  const px = cx - 65 + 130 * ((t*0.5)%1);
+  ctx.fillStyle = '#ffaa00';
+  ctx.shadowColor = '#ffaa00';
+  ctx.shadowBlur = 4;
+  ctx.beginPath(); ctx.arc(px, cy + 8, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  // Labels
+  ctx.fillStyle = P.textLabel;
+  ctx.font = '7px sans-serif';
+  ctx.fillText('12 AWG', cx - 65, cy + 22);
+  ctx.fillText('EMBEDDED IN LAMINATION', cx - 65, cy - 38);
+}
+
+// Inset: window CNC routing
+function insetWindowRoute(cx, cy, t) {
+  // CLT wall section
+  ctx.fillStyle = P.cltD;
+  ctx.fillRect(cx - 80, cy - 50, 160, 100);
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = i % 2 === 0 ? P.clt : P.cltD;
+    ctx.fillRect(cx - 80, cy - 50 + i*20, 160, 18);
+  }
+  // Window hole cut
+  ctx.fillStyle = '#000';
+  const cutW = 70 * Math.min(1, t*0.5);
+  ctx.fillRect(cx - 35, cy - 20, cutW, 40);
+  // Router bit at cut edge
+  if (cutW > 0 && cutW < 70) {
+    const rx = cx - 35 + cutW;
+    ctx.fillStyle = P.steelL;
+    ctx.beginPath(); ctx.arc(rx, cy, 3, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,200,0.7)';
+    for (let k = 0; k < 4; k++) {
+      const a = t*20 + k*Math.PI/2;
+      ctx.beginPath();
+      ctx.moveTo(rx, cy);
+      ctx.lineTo(rx + Math.cos(a)*3, cy + Math.sin(a)*3);
+      ctx.stroke();
+    }
+    // Dust cloud
+    for (let s = 0; s < 10; s++) {
+      const sa = (t*2 + s*0.6) % (Math.PI*2);
+      ctx.fillStyle = `rgba(220,180,120,${0.5 - s/20})`;
+      ctx.fillRect(rx + Math.cos(sa)*6, cy + Math.sin(sa)*4, 1.2, 1.2);
+    }
+  }
+  // Labels
+  ctx.fillStyle = P.textLabel;
+  ctx.font = '7px sans-serif';
+  ctx.fillText('CNC ROUTER', cx - 70, cy - 38);
+  ctx.fillStyle = P.fiber;
+  ctx.fillText(`${Math.floor(cutW*1.4)} mm`, cx - 30, cy + 35);
+}
+
+// Inset: close-up screw drive sequence
+function insetScrewDrive(cx, cy, t) {
+  // Wood section
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i===1 ? P.clt : P.cltD;
+    ctx.fillRect(cx - 70, cy - 30 + i*25, 140, 22);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.strokeRect(cx - 70, cy - 30 + i*25, 140, 22);
+  }
+  // Screw being driven — animated progress
+  const phase = (t*0.5) % 2;
+  const depth = Math.min(1, phase) * 60;
+  ctx.fillStyle = P.steelL;
+  // Shaft
+  ctx.fillRect(cx - 1, cy - 30, 2, depth + 5);
+  // Head
+  ctx.fillStyle = P.steelD;
+  ctx.fillRect(cx - 5, cy - 35, 10, 5);
+  ctx.fillStyle = P.steelL;
+  ctx.fillRect(cx - 5, cy - 35, 10, 2);
+  // Driver bit
+  const bitY = cy - 35 - 10 + phase*5;
+  ctx.fillStyle = P.steel;
+  ctx.fillRect(cx - 2, bitY, 4, 10);
+  // Threads visible as ripples
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 0.5;
+  for (let y = cy - 25; y < cy - 25 + depth; y += 3) {
+    ctx.beginPath();
+    ctx.moveTo(cx - 2, y);
+    ctx.lineTo(cx + 2, y + 1);
+    ctx.stroke();
+  }
+  // Label
+  ctx.fillStyle = P.textLabel;
+  ctx.font = '7px sans-serif';
+  ctx.fillText('#14 × 10" STRUCTURAL', cx - 65, cy + 35);
+  ctx.fillStyle = P.fiber;
+  ctx.fillText(`depth: ${Math.floor(depth/6*150)} mm`, cx - 65, cy - 38);
+}
+
+// Inset: plumbing rough-in
+function insetPlumbing(cx, cy, t) {
+  // Wall section
+  ctx.fillStyle = P.cltD;
+  ctx.fillRect(cx - 80, cy - 45, 160, 90);
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = i % 2 === 0 ? P.clt : P.cltD;
+    ctx.fillRect(cx - 80, cy - 45 + i*22, 160, 20);
+  }
+  // Vertical stack
+  ctx.fillStyle = '#888';
+  ctx.fillRect(cx - 5, cy - 45, 10, 90);
+  ctx.fillStyle = '#aaa';
+  ctx.fillRect(cx - 5, cy - 45, 2, 90);
+  // Horizontal branches
+  ctx.fillStyle = '#888';
+  ctx.fillRect(cx - 60, cy - 20, 65, 6);
+  ctx.fillRect(cx + 5, cy + 10, 55, 6);
+  // Water flowing animation
+  ctx.fillStyle = `rgba(100,180,255,${0.6+pulse(t,3)*0.4})`;
+  const wp = (t*0.3) % 1;
+  ctx.fillRect(cx - 1, cy - 40 + 80*wp, 2, 8);
+  // Labels
+  ctx.fillStyle = P.textLabel;
+  ctx.font = '7px sans-serif';
+  ctx.fillText('PEX-A SUPPLY', cx - 78, cy + 40);
+  ctx.fillText('3" DWV STACK', cx + 10, cy - 35);
+}
+
+// Inset: multi-species lamination detail closeup
+function insetSpeciesCloseup(cx, cy, t) {
+  const layers = [
+    {col: P.birch, label: 'BIRCH (UV face)'},
+    {col: P.birchD, label: 'BIRCH sub'},
+    {col: P.clt, label: 'DOUGLAS FIR'},
+    {col: P.cltD, label: 'RECLAIMED'},
+    {col: P.redwood, label: 'REDWOOD (decay)'},
+    {col: P.cltD, label: 'RECLAIMED'},
+    {col: P.clt, label: 'DOUGLAS FIR'},
+    {col: P.birch, label: 'BIRCH (interior)'},
+  ];
+  const h = 12;
+  layers.forEach((L, i) => {
+    ctx.fillStyle = L.col;
+    ctx.fillRect(cx - 70, cy - layers.length*h/2 + i*h, 140, h-1);
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.strokeRect(cx - 70, cy - layers.length*h/2 + i*h, 140, h-1);
+    // Grain
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 0.3;
+    for (let g = 0; g < 140; g += 4 + (i%3)) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 70 + g, cy - layers.length*h/2 + i*h);
+      ctx.lineTo(cx - 70 + g + 2, cy - layers.length*h/2 + i*h + h - 1);
+      ctx.stroke();
+    }
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = 'bold 5.5px sans-serif';
+    ctx.fillText(L.label, cx - 67, cy - layers.length*h/2 + i*h + 8);
+  });
+  // Adhesive bond line highlight
+  const bi = Math.floor((t*2) % layers.length);
+  ctx.fillStyle = 'rgba(255,220,100,0.8)';
+  ctx.fillRect(cx - 70, cy - layers.length*h/2 + bi*h - 1, 140, 1);
+}
+
+// ============================================================
+// STEPS ARRAY — 40 EXPANDED STEPS
+// ============================================================
+const steps = [
+  {
+    title: "Step 1 — Original Structure",
+    desc: "An aging house stands on its existing foundation. Weathered, inefficient, and vulnerable — but the foundation is sound. A candidate for complete CLT transformation.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(1, true, true);
+      // Scale figures
+      person(160, GY);
+      person(170, GY, '#2a5a2a');
+      annotate(HX+HW/2, HY+5, 'Existing: 1960s wood frame', HX+HW+20, HY-30);
+      annotate(HX-8, GY-7, 'Concrete foundation', HX-120, GY-40);
+    }
+  },
+  {
+    title: "Step 2 — Site Survey & 3D LIDAR Mapping",
+    desc: "Laser scanner captures the structure with millimeter precision. Every stud, window, and knot recorded. Digital twin generated. Fiber optic sensor placement planned from the point cloud.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.9, true, true);
+      scanLines(t);
+      // Tripod scanner
+      ctx.strokeStyle = P.steelL;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(HX - 60, GY);
+      ctx.lineTo(HX - 55, GY - 40);
+      ctx.moveTo(HX - 50, GY);
+      ctx.lineTo(HX - 55, GY - 40);
+      ctx.moveTo(HX - 45, GY);
+      ctx.lineTo(HX - 55, GY - 40);
+      ctx.stroke();
+      ctx.fillStyle = P.robot;
+      ctx.beginPath(); ctx.arc(HX - 55, GY - 44, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = P.robotGlow;
+      ctx.beginPath(); ctx.arc(HX - 55, GY - 44, 2 + pulse(t,5), 0, Math.PI*2); ctx.fill();
+      drawInset('LIDAR SCAN DATA', (cx,cy)=>{
+        // Point cloud visualization (denser)
+        for (let i = 0; i < 160; i++) {
+          const px = cx - 80 + (i*13.3) % 160;
+          const py = cy - 50 + (i*7.7) % 100;
+          const alpha = 0.3 + Math.sin(t*2 + i*0.3)*0.3 + 0.3;
+          ctx.fillStyle = `rgba(0,255,136,${alpha})`;
+          ctx.fillRect(px, py, 1, 1);
+        }
+        ctx.strokeStyle = 'rgba(0,255,136,0.5)';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([1,1]);
+        ctx.strokeRect(cx-60, cy-40, 120, 80);
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.fiber;
+        ctx.font = '8px monospace';
+        ctx.fillText('12.4M points', cx-55, cy-45);
+        ctx.fillText('±2mm accuracy', cx-55, cy+55);
+      });
+      annotate(HX - 55, GY - 48, 'Tripod LIDAR scanner', HX - 180, GY - 70);
+    }
+  },
+  {
+    title: "Step 3 — Ground-Penetrating Radar Survey",
+    desc: "Foundation integrity assessed via GPR. Subsurface voids, frost damage, and utility paths mapped before any disruption. A sound existing foundation is the only prerequisite — everything above can be replaced.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.85, true, true);
+      gprScan(t);
+      // Radar data readout inset
+      drawInset('GPR SUBSURFACE', (cx,cy)=>{
+        // Depth scale
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(cx - 80, cy - 50, 160, 100);
+        // Horizontal soil layers
+        for (let i = 0; i < 8; i++) {
+          ctx.fillStyle = `rgba(${100+i*15},${80+i*10},${40+i*5},0.6)`;
+          ctx.fillRect(cx - 80, cy - 50 + i*12, 160, 11);
+        }
+        // Foundation outline showing as bright return
+        ctx.strokeStyle = 'rgba(255,255,100,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 55, cy - 45, 110, 20);
+        // Sweep line
+        const sweep = cx - 75 + (t*40)%150;
+        ctx.strokeStyle = 'rgba(100,255,200,0.8)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sweep, cy - 50);
+        ctx.lineTo(sweep, cy + 50);
+        ctx.stroke();
+        ctx.fillStyle = P.fiber;
+        ctx.font = '7px monospace';
+        ctx.fillText('DEPTH 0—2m', cx - 75, cy - 42);
+        ctx.fillText('FOUNDATION: SOUND', cx - 75, cy + 55);
+      });
+    }
+  },
+  {
+    title: "Step 4 — Helical Piers Installed",
+    desc: "Hydraulic auger drives ground screws around the perimeter. Zero excavation. Piers support the new CLT ring wall independently of the existing foundation — fully reversible if ever dismantled.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.95, true, true);
+      piers();
+      augerMachine(t);
+      annotate(HX - MAX_LAYERS*LAYER - 10, GY+30, 'Helical pier 48" deep', HX-180, GY+80);
+      drawInset('HELICAL PIER DRIVE', (cx,cy)=>insetPierDrive(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 5 — Electric Semi Arrives with Vacuum-Dried Lumber",
+    desc: "Tesla Semi descends from the forest with reclaimed oil pipe chambers holding lumber under vacuum. Regenerative braking drove the vacuum pumps during descent — gravity powered the entire drying process.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.9, true, true);
+      piers();
+      truck(t);
+      drawInset('VACUUM PIPE CHAMBER', (cx,cy)=>insetPipeChamber(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 6 — Pipe Chambers Vent & Open",
+    desc: "Vacuum chambers slowly repressurize to avoid moisture shock. Seals break, end-caps swing open, revealing dense stacks of lumber at 10% moisture content — already optimal for lamination.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.85, true, true);
+      piers();
+      // Parked truck with chamber doors opening
+      const tx = HX + HW + MAX_LAYERS*LAYER + 60;
+      const ty = GY - 70;
+      ctx.fillStyle = P.truckBody;
+      ctx.fillRect(tx, ty, 180, 55);
+      // Chamber pipes with hinged end caps
+      for (let i = 0; i < 3; i++) {
+        const cy = ty + 5 + i*17;
+        ctx.fillStyle = P.steel;
+        roundRect(tx + 4, cy, 170, 14, 6); ctx.fill();
+        ctx.strokeStyle = P.steelD;
+        ctx.stroke();
+        // End cap (rotating open)
+        const openAng = Math.min(Math.PI*0.6, t*0.8 + i*0.1);
+        ctx.save();
+        ctx.translate(tx + 4, cy + 7);
+        ctx.rotate(-openAng);
+        ctx.fillStyle = P.steelL;
+        ctx.beginPath(); ctx.arc(0, 0, 7, -Math.PI/2, Math.PI/2); ctx.fill();
+        ctx.restore();
+        // Lumber visible inside
+        if (openAng > 0.4) {
+          ctx.fillStyle = P.birch;
+          ctx.fillRect(tx + 12, cy + 3, 160, 8);
+          ctx.strokeStyle = P.birchD;
+          ctx.lineWidth = 0.3;
+          for (let g = 0; g < 160; g += 5) {
+            ctx.beginPath();
+            ctx.moveTo(tx + 12 + g, cy + 3);
+            ctx.lineTo(tx + 12 + g, cy + 11);
+            ctx.stroke();
+          }
+        }
+        // Hiss of pressure release
+        if (openAng < 0.3) {
+          ctx.fillStyle = `rgba(255,255,255,${0.3*pulse(t,8)})`;
+          for (let k = 0; k < 5; k++) {
+            const a = -Math.PI/2 + (k/5)*Math.PI + Math.sin(t*2+k)*0.1;
+            ctx.fillRect(tx + 4 + Math.cos(a)*10, cy + 7 + Math.sin(a)*10, 1, 1);
+          }
+        }
+      }
+      ctx.fillStyle = 'rgba(200,255,200,0.7)';
+      ctx.font = '9px monospace';
+      ctx.fillText('VENT: -14→0 inHg', tx + 4, ty - 5);
+      annotate(tx + 90, ty + 30, 'Pressure equalizing', tx + 190, ty + 50);
+    }
+  },
+  {
+    title: "Step 7 — Lumber Graded & Sorted by Vision System",
+    desc: "Chambers fully opened. Vision system grades each board in real time — knot density, grain run-out, moisture gradient. Birch for face laminations, site-grown species for core, redwood for moisture-resistant inner layers.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.82, true, true);
+      piers();
+      lumberYard(t);
+      // Organized species stacks
+      const yardX = HX + HW + MAX_LAYERS*LAYER + 40;
+      lumberStack(yardX, GY - 5, 40, 8, 'birch', 'BIRCH');
+      lumberStack(yardX + 50, GY - 5, 40, 10, 'clt', 'DOUG FIR');
+      lumberStack(yardX + 100, GY - 5, 40, 6, 'redwood', 'REDWOOD');
+      person(HX + HW + MAX_LAYERS*LAYER + 30, GY);
+      // Grading laser line
+      ctx.strokeStyle = 'rgba(255,50,50,0.6)';
+      ctx.lineWidth = 0.5;
+      const lx = yardX - 15;
+      ctx.beginPath();
+      ctx.moveTo(lx, GY - 5 - Math.sin(t*2)*20 - 10);
+      ctx.lineTo(lx + 160, GY - 5 - Math.sin(t*2)*20 - 10);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,100,100,0.8)';
+      ctx.font = '7px monospace';
+      ctx.fillText('VISION GRADE', lx, GY - 60);
+      drawInset('HYBRID LAYUP SCHEME', (cx,cy)=>insetCLTCrossSection(cx,cy));
+    }
+  },
+  {
+    title: "Step 8 — Board Edge Prep & CNC Jointing",
+    desc: "Each board's edges are planed and jointed to match its neighbors exactly. Finger-joint ends mate into continuous runs. Zero gaps between adjacent boards keep the vacuum cavities sealed.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.8, true, true);
+      piers();
+      // Jointing station
+      const jx = HX + HW + MAX_LAYERS*LAYER + 50;
+      const jy = GY - 60;
+      ctx.fillStyle = P.steelD;
+      ctx.fillRect(jx, jy, 200, 30);
+      ctx.fillStyle = P.steelL;
+      ctx.fillRect(jx + 4, jy + 4, 192, 4);
+      // Board moving through
+      const bp = (t*0.3) % 1;
+      const bx = jx + 220 * bp - 20;
+      ctx.fillStyle = P.birch;
+      ctx.fillRect(bx, jy + 10, 60, 10);
+      ctx.strokeStyle = P.birchD;
+      ctx.lineWidth = 0.3;
+      for (let g = 0; g < 60; g += 4) {
+        ctx.beginPath();
+        ctx.moveTo(bx + g, jy + 10);
+        ctx.lineTo(bx + g, jy + 20);
+        ctx.stroke();
+      }
+      // Cutter heads (spinning)
+      for (let k = 0; k < 2; k++) {
+        const cx = jx + 50 + k*100;
+        ctx.fillStyle = P.steelL;
+        ctx.beginPath(); ctx.arc(cx, jy + 15, 6, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,200,0.8)';
+        ctx.lineWidth = 0.5;
+        for (let s = 0; s < 6; s++) {
+          const a = t*30 + s*Math.PI/3;
+          ctx.beginPath();
+          ctx.moveTo(cx, jy + 15);
+          ctx.lineTo(cx + Math.cos(a)*5, jy + 15 + Math.sin(a)*5);
+          ctx.stroke();
+        }
+        // Chips
+        for (let c = 0; c < 6; c++) {
+          const ca = (t*4 + c) % (Math.PI*2);
+          ctx.fillStyle = `rgba(220,180,120,${0.6 - c*0.08})`;
+          ctx.fillRect(cx + Math.cos(ca)*9, jy + 15 + Math.sin(ca)*9, 1, 1);
+        }
+      }
+      annotate(jx + 100, jy - 5, 'CNC edge jointer', jx + 220, jy - 30);
+    }
+  },
+  {
+    title: "Step 9 — Adhesive Bead Laid — First Layer",
+    desc: "Robot arm traces a continuous bead of moisture-cure PU adhesive along the pier top plates. Bead width, thickness, and cure rate tuned per-pass by the embedded IR temperature sensor.",
+    draw: (t) => {
+      bg(t); ground(t);
+      oldHouse(0.78, true, true);
+      piers();
+      // Adhesive bead along left pier line
+      adhesiveBead(0, 'L', t);
+      adhesiveBead(0, 'R', t);
+      railSystem(HY-22, HX-60, HX+HW+60);
+      const progress = Math.min(1, t*0.5);
+      robotArm(HX+HW*0.2, HY-18, HX - 5, HY + HH*progress, {tool:'adhesive', t});
+      drawInset('ADHESIVE BOND LINE', (cx,cy)=>insetAdhesiveBead(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 10 — First Boards Placed on Left Wall",
+    desc: "Birch outer-layer boards slide into place on the adhesive bead. Each board is registered to the LIDAR-derived coordinate system. The robot uses suction grippers to avoid marring the face grain.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(1, {showBoards:true, highlightOuter:true, t, showAdhesive:true});
+      oldHouse(0.72, true, true);
+      piers();
+      railSystem(HY-22, HX-60, HX+HW+60);
+      slidingBoard(0, 'L', t);
+      const rx = HX - 5 + Math.sin(t*0.8)*10;
+      const ry = HY + 50 + Math.sin(t*1.5)*30;
+      robotArm(HX+HW/2-20, HY-18, rx, ry, {tool:'grip', t});
+      annotate(HX - LAYER*2, HY + 20, 'Board sliding in', HX - 180, HY);
+    }
+  },
+  {
+    title: "Step 11 — Structural Screws Driven as Clamps",
+    desc: "While the adhesive cures, #14 × 10\" structural screws are driven every 200mm. They clamp the lamination without a pressure press. The screws stay in — permanent steel redundancy throughout every bond line.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(1, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.7, true, true);
+      piers();
+      railSystem(HY-22, HX-60, HX+HW+60);
+      screwArray(0, 'L', 8, t);
+      screwArray(0, 'R', 8, t);
+      const rx = HX - 10;
+      const ry = HY + 30 + ((t*60)%(HH-60));
+      robotArm(HX+HW*0.3, HY-18, rx, ry, {tool:'screw', t});
+      drawInset('SCREW DRIVING CLOSE-UP', (cx,cy)=>insetScrewDrive(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 12 — First Layer Wraps All Sides",
+    desc: "Ring wall geometry closes. Corners lap-joined with alternating overlap. Each corner is a three-way interlock — creating monolithic structural continuity unlike panelized CLT where panels meet at simple seams.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(2, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.65, true, true);
+      piers();
+      railSystem(HY-22, HX-70, HX+HW+70);
+      const rx = HX + HW/2 + Math.sin(t*0.5)*100;
+      robotArm(rx-5, HY-18, rx, HY+80, {tool:'adhesive', t});
+      annotate(HX-10, HY+100, 'Continuous ring wall', HX-140, HY+130);
+    }
+  },
+  {
+    title: "Step 13 — Permanent Robot Rail System Anchored",
+    desc: "At layer three, the permanent stainless guide rail is embedded along the wall top. The robot will travel this track for the rest of construction — and remain for decades as automated maintenance infrastructure.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(3, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.62, true, true);
+      piers();
+      railSystem(HY-22, HX-3*LAYER-15, HX+HW+3*LAYER+15);
+      robotArm(HX+HW*0.4, HY-18, HX+HW*0.3, HY+30, {tool:'screw', t});
+      robotArm(HX+HW*0.7, HY-18, HX+HW*0.8, HY+60, {tool:'screw', t});
+      annotate(HX-20, HY-22, 'Permanent rail system', HX-160, HY-50);
+      drawInset('ROBOT SCREW DRIVING', (cx,cy)=>insetRobotDetail(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 14 — Cross-Lamination: Boards Placed at 90°",
+    desc: "Layer four rotates the boards ninety degrees. It's this cross-lay that gives CLT its plate-like two-way structural action — dimensional stability in every direction, resistance to long-span bending.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(4, {showBoards:true, highlightOuter:true, t});
+      // Visualize cross direction overlay
+      const cx1 = HX - 3.5*LAYER;
+      ctx.strokeStyle = 'rgba(255,220,120,0.8)';
+      ctx.lineWidth = 1;
+      for (let y = HY+10; y < GY-15; y += 8) {
+        ctx.beginPath();
+        ctx.moveTo(cx1 - 2, y);
+        ctx.lineTo(cx1 + LAYER + 2, y);
+        ctx.stroke();
+      }
+      oldHouse(0.6, true, true);
+      piers();
+      railSystem(HY-22, HX-4*LAYER-15, HX+HW+4*LAYER+15);
+      robotArm(HX+HW*0.25, HY-18, HX-3*LAYER, HY+60, {tool:'adhesive', t});
+      annotate(HX - 4*LAYER, HY + 40, '90° cross-lay', HX - 190, HY + 20);
+    }
+  },
+  {
+    title: "Step 15 — Fiber Optics Embedded in Lamination",
+    desc: "Every fourth layer receives fiber optic cables before bonding. Single-mode fiber delivers UV cure during construction and provides Brillouin backscatter structural monitoring for the building's full lifetime.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(6, {showBoards:true, highlightOuter:true, glowFiber:true, t});
+      oldHouse(0.55, true, true);
+      piers();
+      railSystem(HY-22, HX-6*LAYER-15, HX+HW+6*LAYER+15);
+      const rx = HX - 6*LAYER - 5 + Math.sin(t*0.7)*20;
+      robotArm(HX+HW*0.2, HY-18, rx, HY+80, {tool:'grip', t});
+      drawInset('FIBER IN LAMINATION', (cx,cy)=>insetFiberDetail(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 16 — UV Cure via Embedded Fiber",
+    desc: "UV light travels the embedded fibers, curing adhesive across the entire bond line in seconds. No pressure press needed. The robot moves on to the next course while the previous cure is still propagating.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(7, {showBoards:true, highlightOuter:true, uvCure:true, t});
+      oldHouse(0.52, true, true);
+      piers();
+      railSystem(HY-22, HX-7*LAYER-15, HX+HW+7*LAYER+15);
+      ctx.fillStyle = `rgba(168,85,247,${0.6+pulse(t,3)*0.4})`;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('◆ UV CURE ACTIVE ◆', HX+HW/2, HY-30);
+      ctx.textAlign = 'left';
+      drawInset('UV CURE AT BOND LINE', (cx,cy)=>insetUVCure(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 17 — Vacuum Cavity Chamber Formed",
+    desc: "At mid-wall depth, a sealed cavity is created between lamination layers. Two thin layers bracket a continuous air-filled volume. This becomes the insulation envelope once evacuated.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(9, {showBoards:true, highlightOuter:true, t});
+      const mid = 4;
+      ctx.fillStyle = P.vacBlue;
+      ctx.fillRect(HX - (mid+1)*LAYER, HY+20, LAYER*2, HH-40);
+      ctx.fillRect(HX + HW + mid*LAYER, HY+20, LAYER*2, HH-40);
+      ctx.strokeStyle = 'rgba(100,200,255,0.6)';
+      ctx.strokeRect(HX - (mid+1)*LAYER, HY+20, LAYER*2, HH-40);
+      ctx.strokeRect(HX + HW + mid*LAYER, HY+20, LAYER*2, HH-40);
+      oldHouse(0.5, true, true);
+      piers();
+      drawInset('VACUUM CAVITY DETAIL', (cx,cy)=>insetVacuumCavity(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 18 — Vacuum Pump Connected, Pressure Dropping",
+    desc: "A reclaimed HVAC scroll pump ties to the port-fitting. Over four hours pressure drops from atmospheric to –28 inHg. The cavity achieves R-30+ per inch — better than any conventional fiber insulation.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(10, {showBoards:true, highlightOuter:true, t});
+      const mid = 4;
+      // Draw glowing vacuum cavity
+      ctx.fillStyle = `rgba(80,160,220,${0.6 + pulse(t,2)*0.2})`;
+      ctx.fillRect(HX - (mid+1)*LAYER, HY+20, LAYER*2, HH-40);
+      ctx.fillRect(HX + HW + mid*LAYER, HY+20, LAYER*2, HH-40);
+      oldHouse(0.5, true, true);
+      piers();
+      vacuumPump(HX - 130, HY + HH - 25, t);
+      annotate(HX - (mid+2)*LAYER, HY + 50, 'Evacuating R-30 cavity', HX - 230, HY + 20);
+    }
+  },
+  {
+    title: "Step 19 — Species Transition to Redwood Core",
+    desc: "Midway through the wall depth, the feed switches from Douglas fir to redwood. A single-species decay barrier protects the inner laminations from ever having moisture migrate past it.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(12, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.45, true, true);
+      piers();
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillStyle = P.birchD;
+      ctx.fillText('← Birch (UV/screw)', HX - 13*LAYER - 110, HY+30);
+      ctx.fillStyle = P.cltD;
+      ctx.fillText('← Douglas fir (structural)', HX - 10*LAYER - 135, HY+60);
+      ctx.fillStyle = P.redwoodD;
+      ctx.fillText('← Redwood (decay barrier)', HX - 6*LAYER - 145, HY+90);
+      railSystem(HY-22, HX-12*LAYER-15, HX+HW+12*LAYER+15);
+      robotArm(HX+HW*0.4, HY-18, HX-6*LAYER, HY+85, {tool:'grip', t});
+      drawInset('SPECIES CLOSE-UP', (cx,cy)=>insetSpeciesCloseup(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 20 — Electrical Conduit Embedded in Lamination",
+    desc: "Between layers 12 and 13 the robot lays copper-sheathed conduit along the wall perimeter. Junction boxes are pre-routed. Wiring is permanently embedded — no fishing, no chases, no drywall ever.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(13, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.42, true, true);
+      piers();
+      conduitRun(t);
+      railSystem(HY-22, HX-13*LAYER-15, HX+HW+13*LAYER+15);
+      robotArm(HX+HW*0.5, HY-18, HX+HW*0.45, HY+60, {tool:'grip', t});
+      drawInset('CONDUIT IN LAMINATION', (cx,cy)=>insetConduit(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 21 — Plumbing Chase Formed",
+    desc: "A dedicated plumbing chase is routed through two adjacent laminations. PEX supply lines and DWV stacks install into pre-formed channels. Inspection ports at each junction remain accessible from inside.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(14, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.4, true, true);
+      piers();
+      // Visible plumbing stack on exterior wall inner lamination
+      ctx.fillStyle = '#888';
+      ctx.fillRect(HX + HW - 14*LAYER - 8, HY+20, 6, HH-30);
+      ctx.fillStyle = '#aaa';
+      ctx.fillRect(HX + HW - 14*LAYER - 8, HY+20, 1.5, HH-30);
+      ctx.fillStyle = `rgba(100,180,255,${0.7+pulse(t,3)*0.3})`;
+      const wp = ((t*0.4)%1);
+      ctx.fillRect(HX + HW - 14*LAYER - 6, HY + 20 + (HH-40)*wp, 2, 10);
+      drawInset('PLUMBING ROUGH-IN', (cx,cy)=>insetPlumbing(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 22 — Window CNC Cutouts",
+    desc: "With the wall at full thickness, the robot CNC-routes window openings through all 18 laminations. Dust extraction runs simultaneously. Pre-built window units slot into the cut openings and are screwed to the frame from inside.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(16, {showBoards:true, highlightOuter:true, t});
+      oldHouse(0.36, true, true);
+      piers();
+      // Windows being cut visibly on CLT wall
+      const progress = Math.min(1, t*0.4);
+      windowCutout(HX + 20 - 16*LAYER, HY + 40, 55, 40, progress, t);
+      windowCutout(HX + HW - 75 + 16*LAYER, HY + 40, 55, 40, Math.min(1, progress - 0.2), t);
+      railSystem(HY-22, HX-16*LAYER-15, HX+HW+16*LAYER+15);
+      robotArm(HX+HW*0.15, HY-18, HX + 40 - 16*LAYER + 55*progress, HY + 60, {tool:'cut', t});
+      drawInset('CNC WINDOW ROUTING', (cx,cy)=>insetWindowRoute(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 23 — CLT Ring Wall Complete",
+    desc: "Continuous laminated ring wall reaches full 18-layer height. Hybrid species, integrated fiber optics, vacuum cavity, conduits, plumbing, and windows — all built around the old house while the family remains inside.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      oldHouseInCLT(0.45, t);
+      piers();
+      person(160, GY);
+      person(170, GY, '#2a5a2a');
+      person(HX+HW+MAX_LAYERS*LAYER+50, GY);
+      annotate(HX, HY+20, 'Old house still livable inside', HX-180, HY);
+    }
+  },
+  {
+    title: "Step 24 — Robot Transitions to Interior Track",
+    desc: "The same robot arm that built the walls now moves onto interior ceiling tracks. Over the next steps it will systematically deconstruct the old house — the old structure becoming feedstock for its own replacement.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      oldHouseInCLT(0.55, t);
+      piers();
+      const thick = MAX_LAYERS*LAYER;
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      robotArm(HX+HW/2, HY+5, HX+HW/2-20, HY+60, {tool:'grip', t});
+    }
+  },
+  {
+    title: "Step 25 — Old Roof Removed",
+    desc: "Robot carefully removes old roofing materials, sorting as it works. The CLT ring is open at the top — ready to receive the new integrated roof panel.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      // Old house without roof
+      const thick = MAX_LAYERS*LAYER;
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = P.oldWall;
+      ctx.fillRect(HX+thick, HY, HW-thick*2, HH);
+      ctx.fillStyle = P.oldWin;
+      ctx.fillRect(HX+thick+20, HY+40, 40, 40);
+      ctx.fillRect(HX+HW-thick-60, HY+40, 40, 40);
+      ctx.globalAlpha = 1;
+      // Debris being lifted out
+      ctx.fillStyle = P.oldRoof;
+      const dy = HY - 30 - Math.sin(t*2)*10;
+      ctx.fillRect(HX+HW/2-30, dy, 60, 10);
+      piers();
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      robotArm(HX+HW*0.4, HY+5, HX+HW/2, dy+5, {tool:'grip', t});
+      annotate(HX+HW/2, dy+5, 'Old roof being lifted out', HX+HW/2+70, dy-20);
+    }
+  },
+  {
+    title: "Step 26 — Old Framing Exposed & Assessed",
+    desc: "With the roof gone, the robot begins systematic deconstruction of the framing. Vision systems grade each piece in real time. Pre-1970 old-growth lumber flagged as premium stock.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      framingInside(0.9);
+      piers();
+      const thick = MAX_LAYERS*LAYER;
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      const rx = HX+HW*0.4 + Math.sin(t)*60;
+      robotArm(HX+HW*0.5, HY+5, rx, HY+80+Math.cos(t)*20, {tool:'cut', t});
+      annotate(HX+thick+50, HY+100, 'Old-growth studs graded', HX-50, HY+140);
+    }
+  },
+  {
+    title: "Step 27 — Salvaged Lumber Graded In Real Time",
+    desc: "Vision and acoustic tap testing classify each piece as it comes down. Sorted stacks accumulate: premium old-growth, structural grade, reclaim. Feedstock for new CLT laminations.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      framingInside(0.3);
+      piers();
+      const thick = MAX_LAYERS*LAYER;
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      robotArm(HX+HW*0.3, HY+5, HX+HW*0.25, HY+80, {tool:'grip', t});
+      // Sorted piles inside
+      const ix = HX+thick+15;
+      ['O-GROWTH','STRUCT','RECLAIM'].forEach((lbl, i) => {
+        const col = [P.birchD, P.clt, P.redwoodD][i];
+        const px = ix + i*70;
+        for (let b = 0; b < 5; b++) {
+          ctx.fillStyle = col;
+          ctx.fillRect(px, GY-18-b*4, 50, 3);
+          ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+          ctx.lineWidth = 0.3;
+          ctx.strokeRect(px, GY-18-b*4, 50, 3);
+        }
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '7px sans-serif';
+        ctx.fillText(lbl, px, GY-42);
+      });
+    }
+  },
+  {
+    title: "Step 28 — Non-Wood Materials Separated",
+    desc: "Copper wire, plumbing, insulation, drywall routed to separate recycling streams. Near-zero landfill waste. Copper flagged for salvage value. Gypsum available for soil amendment.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      const thick = MAX_LAYERS*LAYER;
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      robotArm(HX+HW*0.6, HY+5, HX+HW*0.65, HY+90, {tool:'grip', t});
+      // Recycle bins
+      const bins = [
+        { lbl: 'COPPER', col: P.copper },
+        { lbl: 'GYPSUM', col: '#9ca3af' },
+        { lbl: 'INSUL', col: '#fde68a' },
+        { lbl: 'SCRAP', col: '#6b7280' }
+      ];
+      bins.forEach((b, i) => {
+        const bx = HX+thick+10 + i*60;
+        // Bin
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        roundRect(bx, GY-32, 50, 22, 2); ctx.fill();
+        ctx.fillStyle = b.col;
+        roundRect(bx+2, GY-30, 46, 18, 2); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.font = 'bold 7px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(b.lbl, bx+25, GY-18);
+        ctx.textAlign = 'left';
+      });
+    }
+  },
+  {
+    title: "Step 29 — Interior Cleared",
+    desc: "Old structure fully removed. Interior is a clean, dry, protected workspace. All salvaged wood has been added to the CLT lamination feedstock — already at target moisture content.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      const thick = MAX_LAYERS*LAYER;
+      // Warm interior light
+      ctx.fillStyle = 'rgba(196,145,58,0.08)';
+      ctx.fillRect(HX+thick, HY+5, HW-thick*2, HH-5);
+      // Empty space label
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Interior Cleared', HX+HW/2, HY+HH/2);
+      ctx.font = '9px sans-serif';
+      ctx.fillText('Ready for floor & roof systems', HX+HW/2, HY+HH/2+18);
+      ctx.textAlign = 'left';
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+    }
+  },
+  {
+    title: "Step 30 — Radiant Floor PEX Laid",
+    desc: "Serpentine PEX-A tubing is laid across the full floor area, anchored at 200mm spacing. Each loop is pressure-tested before the floor panel is closed over it. Manifold ties out through the plumbing chase.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      radiantFloor(t);
+      const thick = MAX_LAYERS*LAYER;
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      annotate(HX+HW/2, GY-10, 'PEX-A radiant loops', HX+HW/2+80, GY+20);
+      drawInset('PLUMBING DETAIL', (cx,cy)=>insetPlumbing(cx,cy,t));
+    }
+  },
+  {
+    title: "Step 31 — CLT Floor Panel Laminated Over PEX",
+    desc: "Floor panels are laminated directly over the PEX. Five cross-laid layers bond to the wall courses via continuous adhesive beads. No screed, no visible mechanical — the floor itself is the heat emitter.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      radiantFloor(t);
+      floorPanel();
+      const thick = MAX_LAYERS*LAYER;
+      railSystem(HY+8, HX+thick+5, HX+HW-thick-5);
+      annotate(HX+HW/2, GY-10, 'CLT floor over PEX', HX+HW/2+80, GY+20);
+    }
+  },
+  {
+    title: "Step 32 — Roof Panel Laminating",
+    desc: "Single-pitch CLT roof panel assembled adjacent to the shell. Integrated HVAC duct channels, fiber runs, exterior robot tracks, battery cavity, and solar mounting substrate all built in during lamination.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      // Roof panel being laminated to the side
+      const rpx = HX + HW + MAX_LAYERS*LAYER + 25;
+      const rpy = GY - 90;
+      const rpw = 110;
+      const layers = Math.min(6, Math.floor(t*3+1));
+      for (let i = 0; i < layers; i++) {
+        ctx.fillStyle = i%2===0 ? P.clt : P.cltD;
+        ctx.fillRect(rpx, rpy + i*6, rpw, 5);
+      }
+      // Visible integrated systems
+      if (layers >= 4) {
+        ctx.fillStyle = P.batt;
+        ctx.fillRect(rpx+6, rpy+8, 28, 12);
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 6px sans-serif';
+        ctx.fillText('BATT', rpx+10, rpy+17);
+        ctx.fillStyle = P.hvac;
+        ctx.fillRect(rpx+40, rpy+8, 35, 12);
+        ctx.fillStyle = 'white';
+        ctx.fillText('HVAC', rpx+45, rpy+17);
+        ctx.fillStyle = P.robot;
+        ctx.fillRect(rpx+80, rpy+8, 24, 12);
+        ctx.fillStyle = 'white';
+        ctx.fillText('RAIL', rpx+84, rpy+17);
+      }
+      // Robot working on roof panel
+      robotArm(rpx+rpw/2, rpy-20, rpx+20+Math.sin(t*1.5)*40, rpy+20, {tool:'adhesive', t});
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '10px sans-serif';
+      ctx.fillText('Roof panel laminating…', rpx, rpy-35);
+    }
+  },
+  {
+    title: "Step 33 — Battery & HVAC Integrated Into Roof Panel",
+    desc: "Salvaged Tesla Model 3 battery pack and heat-pump HVAC installed into pre-formed roof cavities. Ceiling-supply ducts positioned for cold-air convection — working with physics instead of against it.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      // Roof panel complete with systems
+      const rpx = HX + HW + MAX_LAYERS*LAYER + 25;
+      const rpy = GY - 100;
+      const rpw = 110;
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = i%2===0 ? P.clt : P.cltD;
+        ctx.fillRect(rpx, rpy + i*6, rpw, 5);
+      }
+      // Battery
+      ctx.fillStyle = P.batt;
+      ctx.fillRect(rpx+6, rpy+38, 50, 20);
+      ctx.fillStyle = P.battL;
+      ctx.fillRect(rpx+8, rpy+40, 46, 3);
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 7px sans-serif';
+      ctx.fillText('TESLA M3 76kWh', rpx+8, rpy+52);
+      // Status LEDs
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = `rgba(0,255,100,${0.5+pulse(t+i,3)*0.5})`;
+        ctx.beginPath(); ctx.arc(rpx+10+i*4, rpy+56, 1, 0, Math.PI*2); ctx.fill();
+      }
+      // HVAC
+      ctx.fillStyle = P.hvac;
+      ctx.fillRect(rpx+60, rpy+38, 44, 20);
+      ctx.fillStyle = P.hvacL;
+      ctx.fillRect(rpx+62, rpy+40, 40, 3);
+      ctx.fillStyle = 'white';
+      ctx.fillText('HEAT PUMP', rpx+64, rpy+52);
+      // Fan
+      ctx.strokeStyle = P.hvacL;
+      ctx.lineWidth = 1;
+      const fa = t*5;
+      ctx.beginPath();
+      ctx.arc(rpx+83, rpy+54, 4, 0, Math.PI*2);
+      ctx.stroke();
+      for (let f = 0; f < 3; f++) {
+        const a = fa + f*Math.PI*2/3;
+        ctx.beginPath();
+        ctx.moveTo(rpx+83, rpy+54);
+        ctx.lineTo(rpx+83+Math.cos(a)*4, rpy+54+Math.sin(a)*4);
+        ctx.stroke();
+      }
+      // Annotations
+      annotate(rpx+30, rpy+48, 'Tesla M3 battery', rpx-120, rpy+30);
+      annotate(rpx+80, rpy+48, 'Heat pump HVAC', rpx+120, rpy+20);
+    }
+  },
+  {
+    title: "Step 34 — Crane Rigged to Roof Panel",
+    desc: "A mobile hydraulic crane positions beside the build. Four-point pick rigging clips into embedded lifting rings in the roof panel. Load cells at each point confirm balance before the panel leaves the ground.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      const liftY = HY + 60;
+      crane(t, liftY);
+      // Panel still on the ground
+      ctx.fillStyle = P.clt;
+      ctx.fillRect(HX + HW + MAX_LAYERS*LAYER + 30, GY - 40, 120, 30);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      for (let i = 1; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(HX + HW + MAX_LAYERS*LAYER + 30, GY - 40 + i*5);
+        ctx.lineTo(HX + HW + MAX_LAYERS*LAYER + 150, GY - 40 + i*5);
+        ctx.stroke();
+      }
+      // Lifting rings
+      for (let k = 0; k < 4; k++) {
+        ctx.strokeStyle = P.steelL;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(HX + HW + MAX_LAYERS*LAYER + 42 + k*32, GY - 45, 3, 0, Math.PI);
+        ctx.stroke();
+      }
+      annotate(HX + HW + MAX_LAYERS*LAYER + 90, GY - 45, 'Load cell: 4-point pick', HX + HW + MAX_LAYERS*LAYER + 200, GY - 80);
+    }
+  },
+  {
+    title: "Step 35 — Roof Panel Lifted Into Position",
+    desc: "The completed panel — structure, ducts, battery, HVAC, fiber, and rails all integrated — is lifted onto the CLT ring wall. Structural screws and adhesive complete the connection at landing.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      const progress = Math.min(1, t*0.4);
+      const liftY = HY - 70 + progress*60;
+      const lx = HX - MAX_LAYERS*LAYER;
+      const rx = HX + HW + MAX_LAYERS*LAYER;
+      crane(t, liftY);
+      // Panel
+      ctx.fillStyle = P.clt;
+      ctx.beginPath();
+      ctx.moveTo(lx, liftY+15);
+      ctx.lineTo(HX+HW/2, liftY);
+      ctx.lineTo(rx, liftY+15);
+      ctx.lineTo(rx, liftY+25);
+      ctx.lineTo(lx, liftY+25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 0.5;
+      for (let i = 1; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(lx, liftY+15+i*2);
+        ctx.lineTo(HX+HW/2, liftY+i*2);
+        ctx.lineTo(rx, liftY+15+i*2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Lifting monolithic roof panel…', HX+HW/2, RPEAK_Y - 55);
+      ctx.textAlign = 'left';
+    }
+  },
+  {
+    title: "Step 36 — Roof Sealed — Monolithic Box Complete",
+    desc: "Roof bonds to the ring wall. The building is now a fully enclosed, monolithic CLT structure. Vacuum cavities evacuated. The strongest structural moment in the build is complete.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      cltRoof(false, 0, t);
+      // Pressure indicator
+      ctx.fillStyle = `rgba(100,200,255,${0.6+pulse(t,3)*0.3})`;
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⊙ VAC SEAL: -28 inHg', HX+HW/2, HY-50);
+      ctx.textAlign = 'left';
+    }
+  },
+  {
+    title: "Step 37 — Robot Transitions to Exterior Roof Track",
+    desc: "Robot arm moves to exterior tracks embedded during roof panel lamination. It now works the outer surface — sealing joints, applying weatherproofing, and preparing for solar installation.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      cltRoof(false, 0, t);
+      // Exterior rail on roof
+      const lx = HX - MAX_LAYERS*LAYER;
+      const rx = HX + HW + MAX_LAYERS*LAYER;
+      ctx.strokeStyle = P.robot;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(lx, HY-10);
+      ctx.lineTo(HX+HW/2, RPEAK_Y+15);
+      ctx.lineTo(rx, HY-10);
+      ctx.stroke();
+      // Robot on exterior
+      const rpos = pulse(t, 0.8);
+      const railX = lx + (HX+HW/2 - lx) * rpos;
+      const railY = HY - 10 - (HY - 10 - (RPEAK_Y+15)) * rpos;
+      robotArm(railX, railY, railX+20, railY+30, {tool:'adhesive', t});
+    }
+  },
+  {
+    title: "Step 38 — Solar Panels Installed",
+    desc: "Photovoltaic panels placed and wired across the south-facing pitch. Optimal alignment achieved automatically using the embedded coordinate system the robot knows from construction.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, t});
+      piers();
+      floorPanel();
+      cltRoof(true, Math.min(8, Math.floor(t*5+1)), t);
+      // Robot placing latest panel
+      const lx = HX - MAX_LAYERS*LAYER;
+      const panelI = Math.min(7, Math.floor(t*5));
+      const panelX = lx + 20 + panelI * 52;
+      const panelY = HY - 10 - panelI * 7;
+      robotArm(panelX+60, panelY-40, panelX+15, panelY+10, {tool:'grip', t});
+      ctx.fillStyle = 'rgba(255,215,0,0.8)';
+      ctx.font = '9px sans-serif';
+      ctx.fillText(`${panelI+1}/8 panels`, HX+HW+20, HY-50);
+    }
+  },
+  {
+    title: "Step 39 — Fiber Optic Network Activated",
+    desc: "Embedded fiber network goes live. Brillouin backscatter provides continuous strain, temperature, and moisture monitoring across every wall, floor, and roof panel. Single fiber run reports the entire structure.",
+    draw: (t) => {
+      bg(t); ground(t);
+      cltWalls(MAX_LAYERS, {showBoards:true, highlightOuter:true, glowFiber:true, t});
+      piers();
+      floorPanel();
+      cltRoof(true, 8, t);
+      fiberNetwork(t);
+    }
+  },
+  {
+    title: "Step 40 — Interior Finishing — Exposed CLT",
+    desc: "Interior surfaces are the CLT panels themselves. Warm birch outer laminations serve as the finished wall and ceiling. No drywall, no dropped ceilings, no visible mechanical systems anywhere.",
+    draw: (t) => {
+      bg(t); ground(t);
+      finishedExterior(false, t);
+      piers();
+      floorPanel();
+      // Interior warm glow
+      const thick = MAX_LAYERS*LAYER;
+      ctx.fillStyle = 'rgba(240,200,140,0.08)';
+      ctx.fillRect(HX+thick, HY+5, HW-thick*2, HH-20);
+      // Grain texture suggestion
+      ctx.strokeStyle = 'rgba(139,101,32,0.15)';
+      ctx.lineWidth = 0.5;
+      for (let y = HY+15; y < GY-20; y += 8) {
+        ctx.beginPath();
+        ctx.moveTo(HX+thick, y);
+        ctx.lineTo(HX+HW-thick, y);
+        ctx.stroke();
+      }
+      // Furniture hint
+      ctx.fillStyle = 'rgba(120,80,40,0.4)';
+      ctx.fillRect(HX+HW/2-40, GY-40, 80, 25);
+      ctx.fillStyle = 'rgba(100,70,30,0.4)';
+      ctx.fillRect(HX+HW/2-45, GY-42, 90, 3);
+      // People
+      person(HX+HW/2-20, GY-15, '#c45a3a');
+      person(HX+HW/2+20, GY-15, '#3a5a9a');
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Family living in exposed CLT interior', HX+HW/2, HY+40);
+      ctx.textAlign = 'left';
+    }
+  },
+  {
+    title: "Step 41 — All Systems Active",
+    desc: "Solar charging. Radiant floor warming. Ceiling cooling. Security via fiber strain detection. Fire detection at ignition threshold. Full structural health monitoring streaming to homeowner dashboard.",
+    draw: (t) => {
+      bg(t); ground(t);
+      finishedExterior(true, t);
+      piers();
+      floorPanel();
+      fiberNetwork(t);
+      systemsDash(t);
+    }
+  },
+  {
+    title: "Step 42 — Transformation Complete",
+    desc: "Fire-resistant · Carbon-negative · Self-monitoring · Off-grid ready. Built from salvaged timber, by 2–3 people, on the same foundation where the old house stood.",
+    draw: (t) => {
+      bg(t); ground(t);
+      finishedExterior(true, t);
+      piers();
+      floorPanel();
+      // Subtle fiber activity
+      const p = pulse(t, 1.5) * 0.3 + 0.5;
+      ctx.shadowColor = P.fiber;
+      ctx.shadowBlur = 3*p;
+      ctx.strokeStyle = `rgba(0,255,136,${0.12*p})`;
+      ctx.lineWidth = 1;
+      const lx = HX - MAX_LAYERS*LAYER;
+      const rx = HX + HW + MAX_LAYERS*LAYER;
+      for (let y = HY+30; y < GY-15; y += 45) {
+        ctx.beginPath();
+        ctx.moveTo(lx, y);
+        ctx.lineTo(rx, y);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // People outside
+      person(160, GY);
+      person(172, GY, '#2a5a2a');
+      person(HX+HW+MAX_LAYERS*LAYER+50, GY, '#c45a3a');
+      // Title banner
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      roundRect(W/2-220, 16, 440, 52, 8);
+      ctx.fill();
+      ctx.strokeStyle = P.clt;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = `rgba(196,145,58,${0.9+p*0.1})`;
+      ctx.font = 'bold 17px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('TRANSFORMATION COMPLETE', W/2, 38);
+      ctx.fillStyle = `rgba(200,255,200,${0.7*p})`;
+      ctx.font = '10px sans-serif';
+      ctx.fillText('Fire Resistant  ·  Carbon Negative  ·  Self-Monitoring  ·  Off-Grid Ready  ·  Built by 2–3 People', W/2, 58);
+      ctx.textAlign = 'left';
+    }
+  },
+];
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+let cur = 0;
+let playing = true;
+let frameMs = 0;
+let lastTs = null;
+let stepProg = 0;
+let STEP_DUR = 4500;
+
+function draw(ts) {
+  if (!lastTs) lastTs = ts;
+  const dt = ts - lastTs;
+  lastTs = ts;
+  if (playing) {
+    frameMs += dt;
+    stepProg = (frameMs % STEP_DUR) / STEP_DUR;
+    if (frameMs >= STEP_DUR) {
+      frameMs = 0;
+      cur = (cur + 1) % steps.length;
+      updateUI();
+    }
+  }
+  ctx.clearRect(0, 0, W, H);
+  const t = stepProg * 4; // animation parameter scales
+  steps[cur].draw(t);
+  overlay();
+  requestAnimationFrame(draw);
+}
+
+function overlay() {
+  // Step badge
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  roundRect(12, H-42, 90, 28, 5);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(196,145,58,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = P.clt;
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText(`Step ${cur+1} / ${steps.length}`, 22, H-24);
+  // Progress bar
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(0, H-3, W, 3);
+  ctx.fillStyle = P.clt;
+  ctx.fillRect(0, H-3, W * ((cur + stepProg) / steps.length), 3);
+}
+
+function updateUI() {
+  document.getElementById('stepTitle').textContent = steps[cur].title;
+  document.getElementById('stepDesc').textContent = steps[cur].desc;
+  document.getElementById('counter').textContent = `${cur+1} / ${steps.length}`;
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.className = 'dot' + (i === cur ? ' active' : i < cur ? ' done' : '');
+  });
+}
+
+// Dots
+const dotsEl = document.getElementById('dots');
+for (let i = 0; i < steps.length; i++) {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 0 ? ' active' : '');
+  d.title = `Step ${i+1}`;
+  d.onclick = () => { cur = i; frameMs = 0; stepProg = 0; updateUI(); };
+  dotsEl.appendChild(d);
+}
+
+document.getElementById('playPause').onclick = () => {
+  playing = !playing;
+  lastTs = null;
+  document.getElementById('playPause').textContent = playing ? '⏸ Pause' : '▶ Play';
+};
+document.getElementById('prev').onclick = () => {
+  cur = (cur - 1 + steps.length) % steps.length;
+  frameMs = 0; stepProg = 0; updateUI();
+};
+document.getElementById('next').onclick = () => {
+  cur = (cur + 1) % steps.length;
+  frameMs = 0; stepProg = 0; updateUI();
+};
+document.getElementById('speed').onchange = (e) => {
+  STEP_DUR = parseInt(e.target.value);
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') {
+    cur = (cur + 1) % steps.length; frameMs = 0; stepProg = 0; updateUI();
+    e.preventDefault();
+  }
+  if (e.key === 'ArrowLeft') {
+    cur = (cur - 1 + steps.length) % steps.length; frameMs = 0; stepProg = 0; updateUI();
+  }
+});
+
+updateUI();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
